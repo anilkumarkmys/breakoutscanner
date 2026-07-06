@@ -710,10 +710,12 @@ def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
     for _, r in capped.iterrows():
         chain = _cached_option_chain(str(r["symbol"])) if live else None
         p = build_plan(str(r["symbol"]), str(r["direction"]), float(r["close"]), float(r["level"]), chain)
+        scanned = r.get("scanned_at")
         rows.append(
             {
                 "Symbol": p.symbol,
                 "TF": r.get("timeframe", ""),
+                "Signal date": str(r.get("bar_time", "") or "—"),
                 "CE/PE": p.opt_type,
                 "Strike": f"{p.strike:g}",
                 "Expiry": p.expiry,
@@ -723,6 +725,7 @@ def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
                 "TP2 ₹": f"{p.tps[1]:,.2f}",
                 "TP3 ₹": f"{p.tps[2]:,.2f}",
                 "SL ₹": f"{p.sl:,.2f}",
+                "Scanned (IST)": format_scanned_at(scanned, short=True) if scanned and pd.notna(scanned) else "—",
                 "Source": "NSE live" if p.live else "estimated",
             }
         )
