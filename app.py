@@ -355,37 +355,20 @@ _CPR_TREND_ICONS = {"above": "🟢 ↑", "below": "🔴 ↓", "inside": "🟡 �
 
 _INDEX_SYMBOLS = frozenset({"VIX", "INDIAVIX", "NIFTY", "BANKNIFTY", "SENSEX"})
 
-_DISCLAIMER_SIDEBAR = """
-**Not financial advice.** For informational, educational, and research use only.
-
-- Scan results are **algorithmic outputs** — not buy/sell recommendations
-- Signals are generated **automatically, without human review**
-- Trading securities involves **substantial risk of loss** — use only risk capital
-- Market data may be **delayed, incomplete, or inaccurate**
-- Past breakouts do **not** guarantee future performance
-- TAG is **not** a SEBI-registered Investment Adviser or Research Analyst
-- No fiduciary or adviser–client relationship is created by using this app
-- Consult a **qualified, SEBI-registered financial adviser** before trading
-
-[Full disclaimer]({url})
-""".format(
-    url=DISCLAIMER_URL
-)
-
-
 def _render_disclaimer_banner() -> None:
+    """Single consolidated disclaimer: short banner + full text in an expander."""
     st.markdown(
-        f"""
+        """
 <div class="tag-disclaimer">
 <p>
-<strong>⚠️ Disclaimer — read before using:</strong> This app is for <strong>research and education
-only</strong>. It is <strong>not investment advice</strong> and not a recommendation to buy or sell any
-security. TAG (Trade And Grow) is <strong>not a SEBI-registered Investment Adviser or Research
-Analyst</strong>. Signals are <strong>algorithmic outputs</strong> generated without human review from
-third-party data that may be delayed, incomplete, or wrong. Trading involves
-<strong>substantial risk of loss</strong> — use only risk capital and consult a qualified,
+<strong>⚠️ Disclaimer:</strong> This app is for <strong>research and education only</strong> — it is
+<strong>not investment advice</strong> and not a recommendation to buy or sell any security.
+TAG (Trade And Grow) is <strong>not SEBI-registered</strong> (Investment Adviser or Research Analyst),
+and using this app creates no adviser–client relationship. Signals are
+<strong>automated algorithmic outputs</strong> — no human review — built from third-party data that may
+be delayed, incomplete, or wrong; past breakouts do not guarantee future performance. Trading involves
+<strong>substantial risk of loss</strong>: use only risk capital and consult a qualified,
 SEBI-registered adviser before acting.
-<a href="{DISCLAIMER_URL}" target="_blank" rel="noopener">Read full disclaimer</a>
 </p></div>
 """,
         unsafe_allow_html=True,
@@ -398,10 +381,34 @@ SEBI-registered adviser before acting.
             st.markdown(f"[Read the full disclaimer on GitHub]({DISCLAIMER_URL})")
 
 
-def _render_disclaimer_sidebar() -> None:
+_ROADMAP_SHIPPED = [
+    "Breakout scanner — 1H / 1D / 1W",
+    "Virgin & Narrow CPR scanner",
+    "📅 Daily Review with scan history",
+    "Scheduled scans via GitHub Actions",
+]
+
+_ROADMAP_UPCOMING = [
+    "Gap-up / gap-down scanner",
+    "Opening-range breakout (ORB) scanner",
+    "Volume-surge & delivery scanner",
+    "Relative strength vs NIFTY (sector rotation)",
+    "EMA crossover / RSI momentum scanner",
+    "Per-stock detail view & signal history",
+    "Signal outcome tracker (returns since signal)",
+    "Watchlist / starred picks",
+]
+
+
+def _render_sidebar_roadmap() -> None:
     st.divider()
-    st.markdown("#### ⚖️ Legal disclaimer")
-    st.markdown(_DISCLAIMER_SIDEBAR)
+    st.markdown("#### 🚀 Scanner roadmap")
+    st.markdown("\n".join(f"- ✅ {item}" for item in _ROADMAP_SHIPPED))
+    st.markdown("**Upcoming**")
+    st.markdown("\n".join(f"- 🔜 {item}" for item in _ROADMAP_UPCOMING))
+    st.caption(
+        "Suggest a scanner — [open an issue](https://github.com/anilkumarkmys/breakoutscanner/issues)."
+    )
 
 
 def _render_summary_metrics(
@@ -548,15 +555,8 @@ def _render_disclaimer_footer() -> None:
 <div style="margin-top:2rem;padding:1rem 1.2rem;border-top:1px solid rgba(240,184,78,.40);
 background:linear-gradient(180deg, rgba(240,184,78,.06), rgba(6,6,6,.95));border-radius:0 0 10px 10px;">
 <p style="font-size:0.78rem;color:#c5b38a;line-height:1.6;margin:0;">
-<strong style="color:#ffd36b;">⚖️ Disclaimer:</strong> The TAG Breakout Scanner is provided for
-informational, educational, and research purposes only. It does not constitute investment, trading, tax,
-or legal advice and does not create an adviser–client or fiduciary relationship. TAG (Trade And Grow) and
-the authors are <strong style="color:#ffd36b;">not SEBI-registered</strong> Investment Advisers, Research
-Analysts, or broker-dealers. Signals are automated algorithmic outputs from historical third-party data
-(Yahoo Finance / NSE) that may be delayed, incomplete, or inaccurate. Trading securities involves
-substantial risk of loss — you may lose all invested capital. Past breakouts and hypothetical results are
-not indicative of future performance. You are solely responsible for your trading decisions; consult a
-qualified, SEBI-registered financial adviser before acting.
+<strong style="color:#ffd36b;">⚖️</strong> Research and education only — not investment advice.
+You are solely responsible for your trading decisions.
 <a href="{DISCLAIMER_URL}" target="_blank" rel="noopener" style="color:#ffd36b;">Full disclaimer</a>
 </p>
 <p style="font-size:0.72rem;color:#8f8259;margin:0.5rem 0 0;">
@@ -1608,7 +1608,7 @@ with st.sidebar:
             "Weekly bars from daily data (Fri close)."
         )
 
-    _render_disclaimer_sidebar()
+    _render_sidebar_roadmap()
 
 tab_breakout, tab_cpr, tab_review = st.tabs(["Breakout Scanner", "CPR Scanner", "📅 Daily Review"])
 
