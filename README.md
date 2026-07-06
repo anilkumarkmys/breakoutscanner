@@ -10,7 +10,7 @@ Built with Python, [yfinance](https://github.com/ranaroussi/yfinance), and [Stre
 
 ## Screenshot
 
-Streamlit dashboard — sidebar scan settings, force-refresh cache, and card view of bullish/bearish breakouts across 1H / 1D / 1W.
+Streamlit dashboard in the TAG black-and-gold theme — sidebar scan settings, force-refresh cache, gold summary metrics, and card view of bullish/bearish breakouts across 1H / 1D / 1W.
 
 ![TAG Breakout Scanner dashboard](docs/images/dashboard-screenshot.png)
 
