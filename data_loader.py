@@ -26,6 +26,7 @@ from config import (
     UNIVERSE_CHOICES,
     UNIVERSE_FNO,
     UNIVERSE_NIFTY50,
+    UNIVERSE_NIFTY250,
     UNIVERSE_NIFTY500,
     YAHOO_TICKER_MAP,
     YFINANCE_SUFFIX,
@@ -151,6 +152,11 @@ def resolve_universe_symbols(
     if choice == UNIVERSE_FNO:
         symbols = load_fno_symbols()
         return symbols, "fno", len(symbols)
+
+    if choice == UNIVERSE_NIFTY250:
+        pool = nifty500 if nifty500 is not None else load_universe_symbols()
+        symbols = select_scan_universe(pool, min(250, len(pool)))
+        return symbols, "even", len(pool)
 
     pool = nifty500 if nifty500 is not None else load_universe_symbols()
     total = len(pool)

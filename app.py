@@ -40,6 +40,7 @@ from results_store import (
     save_cpr_results,
     save_scan_results,
 )
+from options_plan import OptionPlan, build_plan, fetch_option_chain
 from scanner import filter_results, scan_universe
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -386,6 +387,8 @@ _ROADMAP_SHIPPED = [
     "Virgin & Narrow CPR scanner",
     "📅 Daily Review with scan history",
     "Scheduled scans via GitHub Actions",
+    "F&O options plan — CE/PE, strike, expiry, entry/TP/SL",
+    "NIFTY 250 universe",
 ]
 
 _ROADMAP_UPCOMING = [
@@ -675,7 +678,71 @@ def _style_results(df: pd.DataFrame) -> pd.DataFrame:
     return out.rename(columns={k: v for k, v in rename.items() if k in out.columns})
 
 
-def _chart(symbol: str, timeframe: str, level: float) -> go.Figure:
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_option_chain(symbol: str) -> dict | None:
+    return fetch_option_chain(symbol)
+
+
+def _fno_symbols() -> frozenset[str]:
+    if "fno_symbols" not in st.session_state:
+        st.session_state.fno_symbols = fno_symbol_set()
+    return st.session_state.fno_symbols
+
+
+def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
+    """F&O-only view: CE/PE, strike, expiry, option LTP and rule-based
+    entry/TP/SL on the underlying — general stock columns omitted."""
+    plan_df = df[df["symbol"].astype(str).str.upper().isin(_fno_symbols())]
+    if plan_df.empty:
+        return
+
+    st.markdown(f"##### 🎯 F&O options plan — {len(plan_df)} signal(s)")
+    live = st.toggle(
+        "Fetch live strike / expiry / option LTP from NSE",
+        value=False,
+        key=f"fno_live_{key}",
+        help="Needs direct NSE access (works locally in India; usually blocked on Streamlit Cloud). "
+        "Off = estimated ATM strike and expiry, no option LTP.",
+    )
+
+    rows = []
+    capped = plan_df.head(15)
+    for _, r in capped.iterrows():
+        chain = _cached_option_chain(str(r["symbol"])) if live else None
+        p = build_plan(str(r["symbol"]), str(r["direction"]), float(r["close"]), float(r["level"]), chain)
+        rows.append(
+            {
+                "Symbol": p.symbol,
+                "TF": r.get("timeframe", ""),
+                "CE/PE": p.opt_type,
+                "Strike": f"{p.strike:g}",
+                "Expiry": p.expiry,
+                "Opt LTP ₹": f"{p.option_ltp:,.2f}" if p.option_ltp is not None else "—",
+                "Entry ₹": f"{p.entry:,.2f}",
+                "TP1 ₹": f"{p.tps[0]:,.2f}",
+                "TP2 ₹": f"{p.tps[1]:,.2f}",
+                "TP3 ₹": f"{p.tps[2]:,.2f}",
+                "SL ₹": f"{p.sl:,.2f}",
+                "Source": "NSE live" if p.live else "estimated",
+            }
+        )
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True, key=f"fno_plan_{key}")
+    if len(plan_df) > len(capped):
+        st.caption(f"Showing first {len(capped)} of {len(plan_df)} F&O signals.")
+    st.caption(
+        "⚖️ Rule-based levels on the **underlying** (entry = scan close · SL = break level ∓0.5% · "
+        "TP1/2/3 = 1R/2R/3R · ATM strike, nearest expiry). Bullish → CE, bearish → PE. "
+        "Algorithmic template for research — **not** trade advice; verify option liquidity and margins with your broker."
+    )
+
+
+def _row_plan(row: pd.Series) -> OptionPlan:
+    return build_plan(
+        str(row["symbol"]), str(row["direction"]), float(row["close"]), float(row["level"])
+    )
+
+
+def _chart(symbol: str, timeframe: str, level: float, plan: OptionPlan | None = None) -> go.Figure:
     df = load_bars(symbol, timeframe, use_cache=True)
     if df.empty:
         fig = go.Figure()
@@ -699,6 +766,34 @@ def _chart(symbol: str, timeframe: str, level: float) -> go.Figure:
         col=1,
     )
     fig.add_hline(y=level, line_dash="dash", line_color="#f59e0b", annotation_text="Break level", row=1, col=1)
+
+    if plan is not None:
+        fig.add_hline(
+            y=plan.entry,
+            line_color="#ffd36b",
+            annotation_text=f"Entry {plan.entry:,.2f}",
+            annotation_position="top left",
+            row=1,
+            col=1,
+        )
+        for i, tp in enumerate(plan.tps, start=1):
+            fig.add_hline(
+                y=tp,
+                line_dash="dot",
+                line_color="#5dbb7f",
+                annotation_text=f"TP{i} {tp:,.2f}",
+                row=1,
+                col=1,
+            )
+        fig.add_hline(
+            y=plan.sl,
+            line_dash="dash",
+            line_color="#e06552",
+            annotation_text=f"SL {plan.sl:,.2f}",
+            annotation_position="bottom left",
+            row=1,
+            col=1,
+        )
 
     if "volume" in tail.columns:
         colors = ["#16a34a" if c >= o else "#dc2626" for c, o in zip(tail["close"], tail["open"])]
@@ -1474,9 +1569,13 @@ def render_breakout_tab(
                     )
                     row = df[df["symbol"] == pick].iloc[0]
                     st.plotly_chart(
-                        _chart(pick, row["timeframe"], float(row["level"])),
+                        _chart(pick, row["timeframe"], float(row["level"]), plan=_row_plan(row)),
                         use_container_width=True,
                         key=f"plotly_{key}_{pick}",
+                    )
+                    st.caption(
+                        "Chart levels — 🟡 Entry · 🟢 TP1/TP2/TP3 (dotted) · 🔴 SL (dashed): "
+                        "rule-based template, not advice."
                     )
                     st.download_button(
                         "Download CSV",
@@ -1486,6 +1585,8 @@ def render_breakout_tab(
                         key=f"dl_{key}",
                     )
                     st.caption("⚖️ Exported data is for research use only — not a recommendation to trade.")
+
+                _render_fno_plan(df, key)
 
             with tf_tabs[0]:
                 _show(results, "all")
