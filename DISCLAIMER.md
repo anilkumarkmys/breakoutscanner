@@ -1,6 +1,6 @@
 # Financial Markets & Trading Disclaimer
 
-**Last updated:** July 2026
+**Last updated:** 6 July 2026
 
 ## General notice
 
@@ -15,6 +15,14 @@ You should **not** rely on this Software as the sole basis for any investment or
 ## No fiduciary relationship
 
 The authors, contributors, and maintainers of this project are **not** registered investment advisers, broker-dealers, portfolio managers, or financial planners (including under **SEBI** or any other regulator), unless separately stated in writing. Use of the Software does **not** create any advisory, fiduciary, or client relationship.
+
+## Not a SEBI-registered service
+
+**TAG (Trade And Grow)** is **not** registered with the Securities and Exchange Board of India as an **Investment Adviser** (SEBI (Investment Advisers) Regulations, 2013) or a **Research Analyst** (SEBI (Research Analysts) Regulations, 2014). The Software's output is **not** a "research report", "research recommendation", or "investment advice" within the meaning of those regulations. If you require personalised advice or research services, engage a SEBI-registered intermediary.
+
+## Automated signals — no human review
+
+All breakout and CPR signals are generated **automatically by software rules** without human review, judgement, or verification before display. Signals can be triggered by bad ticks, stale quotes, corporate actions, illiquid instruments, or plain software bugs. **Never place an order solely because this Software flagged a symbol.** Independently verify price, volume, news, and circuit limits with your broker or the exchange before any trade.
 
 ## Risk disclosure
 

@@ -132,17 +132,18 @@ a { color: #ffd36b !important; }
     padding: 0.9rem 1rem;
     border-radius: 12px;
     margin-bottom: 0.75rem;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    border: 1px solid rgba(240,184,78,.30);
+    box-shadow: 0 10px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(240,184,78,.12);
     min-height: 130px;
+    background: linear-gradient(150deg, #17110a 0%, #0c0a07 55%, #060606 100%);
 }
 .breakout-card.bullish {
-    background: linear-gradient(145deg, #0d2818 0%, #1b4332 45%, #2d6a4f 100%);
-    border-left: 5px solid #52b788;
+    border-left: 5px solid #5dbb7f;
+    background: linear-gradient(150deg, #0f1a10 0%, #0b0f09 45%, #060606 100%);
 }
 .breakout-card.bearish {
-    background: linear-gradient(145deg, #3b0a0a 0%, #6b1515 45%, #9b2226 100%);
-    border-left: 5px solid #f4845f;
+    border-left: 5px solid #e06552;
+    background: linear-gradient(150deg, #1c0f0b 0%, #110b08 45%, #060606 100%);
 }
 .card-top {
     display: flex;
@@ -161,7 +162,7 @@ a { color: #ffd36b !important; }
 .card-symbol {
     font-size: 1.15rem;
     font-weight: 800;
-    color: #ffffff;
+    color: #ffd36b;
     letter-spacing: 0.02em;
 }
 .card-badges span {
@@ -170,8 +171,9 @@ a { color: #ffd36b !important; }
     font-weight: 700;
     padding: 0.18rem 0.5rem;
     border-radius: 999px;
-    background: rgba(255,255,255,0.14);
-    color: #f8fafc;
+    background: rgba(240,184,78,.12);
+    border: 1px solid rgba(240,184,78,.32);
+    color: #ffd36b;
 }
 .card-pill {
     display: inline-block;
@@ -179,14 +181,16 @@ a { color: #ffd36b !important; }
     font-weight: 700;
     padding: 0.18rem 0.5rem;
     border-radius: 999px;
-    background: rgba(255,255,255,0.14);
-    color: #f8fafc;
+    background: rgba(240,184,78,.12);
+    border: 1px solid rgba(240,184,78,.32);
+    color: #ffd36b;
     margin-left: 0.25rem;
 }
 .card-badges .high52,
 .card-pill.high52 {
-    background: rgba(251, 191, 36, 0.25);
-    color: #fde68a;
+    background: linear-gradient(135deg, rgba(240,184,78,.40), rgba(122,76,13,.40));
+    border-color: rgba(255,211,107,.65);
+    color: #ffe9b3;
 }
 .card-stat-row {
     display: flex;
@@ -196,15 +200,15 @@ a { color: #ffd36b !important; }
 }
 .card-stat {
     font-size: 0.82rem;
-    color: #e2e8f0;
+    color: #d9cfb6;
 }
 .card-stat b {
-    color: #ffffff;
+    color: #fff8e6;
     font-weight: 700;
 }
 .card-foot {
     font-size: 0.74rem;
-    color: #cbd5e1;
+    color: #b3a175;
     opacity: 0.92;
 }
 .summary-metrics {
@@ -218,7 +222,10 @@ a { color: #ffd36b !important; }
     min-width: 110px;
     padding: 0.5rem 0.65rem;
     border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(240,184,78,.28);
+    border-left: 3px solid #f0b84e;
+    background: linear-gradient(150deg, #191307 0%, #0c0a07 60%, #060606 100%);
+    box-shadow: 0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(240,184,78,.10);
 }
 .summary-metric .sm-label {
     font-size: 0.68rem;
@@ -227,43 +234,21 @@ a { color: #ffd36b !important; }
     letter-spacing: 0.04em;
     margin-bottom: 0.15rem;
     opacity: 0.9;
+    color: #d9b878;
 }
 .summary-metric .sm-value {
     font-size: 0.95rem;
     font-weight: 700;
     line-height: 1.25;
     word-break: break-word;
+    color: #f8f5ee;
 }
-.summary-metric.breakouts {
-    background: linear-gradient(145deg, #1e1b4b 0%, #312e81 100%);
-    border-left: 3px solid #a78bfa;
-}
-.summary-metric.breakouts .sm-label { color: #c4b5fd; }
-.summary-metric.breakouts .sm-value { color: #ede9fe; }
-.summary-metric.bullish {
-    background: linear-gradient(145deg, #052e16 0%, #14532d 100%);
-    border-left: 3px solid #4ade80;
-}
-.summary-metric.bullish .sm-label { color: #86efac; }
-.summary-metric.bullish .sm-value { color: #dcfce7; }
-.summary-metric.bearish {
-    background: linear-gradient(145deg, #450a0a 0%, #7f1d1d 100%);
-    border-left: 3px solid #f87171;
-}
-.summary-metric.bearish .sm-label { color: #fca5a5; }
-.summary-metric.bearish .sm-value { color: #fee2e2; }
-.summary-metric.symbols {
-    background: linear-gradient(145deg, #0c4a6e 0%, #075985 100%);
-    border-left: 3px solid #38bdf8;
-}
-.summary-metric.symbols .sm-label { color: #7dd3fc; }
-.summary-metric.symbols .sm-value { color: #e0f2fe; }
-.summary-metric.scanned {
-    background: linear-gradient(145deg, #451a03 0%, #78350f 100%);
-    border-left: 3px solid #fbbf24;
-}
-.summary-metric.scanned .sm-label { color: #fcd34d; }
-.summary-metric.scanned .sm-value { color: #fef3c7; font-size: 0.82rem; font-weight: 600; }
+.summary-metric.breakouts .sm-value { color: #ffd36b; }
+.summary-metric.bullish { border-left-color: #5dbb7f; }
+.summary-metric.bullish .sm-value { color: #9fe0b8; }
+.summary-metric.bearish { border-left-color: #e06552; }
+.summary-metric.bearish .sm-value { color: #f2a08e; }
+.summary-metric.scanned .sm-value { font-size: 0.82rem; font-weight: 600; }
 .cpr-legend {
     display: flex;
     flex-wrap: wrap;
@@ -275,67 +260,41 @@ a { color: #ffd36b !important; }
     padding: 0.35rem 0.65rem;
     border-radius: 8px;
     font-weight: 600;
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(240,184,78,.25);
+    background: rgba(14,12,8,.92);
 }
-.cpr-legend-item.vw { background: rgba(124,58,237,0.35); color: #ddd6fe; }
-.cpr-legend-item.vn { background: rgba(37,99,235,0.35); color: #bfdbfe; }
-.cpr-legend-item.wide { background: rgba(220,38,38,0.35); color: #fecaca; }
-.cpr-legend-item.virgin { background: rgba(22,163,74,0.25); color: #86efac; }
-.cpr-legend-item.touched { background: rgba(220,38,38,0.25); color: #fca5a5; }
+.cpr-legend-item.vw { color: #cbb8f0; border-color: rgba(167,139,250,.45); }
+.cpr-legend-item.vn { color: #a9c6f2; border-color: rgba(96,165,250,.45); }
+.cpr-legend-item.wide { color: #f2a08e; border-color: rgba(224,101,82,.45); }
+.cpr-legend-item.virgin { color: #9fe0b8; border-color: rgba(93,187,127,.45); }
+.cpr-legend-item.touched { color: #d9cfb6; border-color: rgba(240,184,78,.30); }
 .cpr-meta-panel {
-    background: rgba(59,130,246,0.08);
-    border: 1px solid rgba(59,130,246,0.22);
+    background: rgba(240,184,78,.07);
+    border: 1px solid rgba(240,184,78,.30);
     border-radius: 10px;
     padding: 0.55rem 0.8rem;
     margin: 0.35rem 0 0.85rem;
     font-size: 0.78rem;
     line-height: 1.5;
-    color: #cbd5e1;
+    color: #cbbfa2;
 }
-.cpr-meta-panel strong { color: #e2e8f0; font-weight: 600; }
+.cpr-meta-panel strong { color: #ffd36b; font-weight: 600; }
 .cpr-meta-panel code {
     font-size: 0.74rem;
-    color: #86efac;
-    background: rgba(15,23,42,0.45);
+    color: #ffd36b;
+    background: rgba(0,0,0,.55);
     padding: 0.1rem 0.35rem;
     border-radius: 4px;
 }
-.summary-metric.cpr-total {
-    background: linear-gradient(145deg, #1e1b4b 0%, #312e81 100%);
-    border-left: 3px solid #a78bfa;
-}
-.summary-metric.cpr-total .sm-label { color: #c4b5fd; }
-.summary-metric.cpr-total .sm-value { color: #ede9fe; }
-.summary-metric.cpr-virgin {
-    background: linear-gradient(145deg, #052e16 0%, #14532d 100%);
-    border-left: 3px solid #4ade80;
-}
-.summary-metric.cpr-virgin .sm-label { color: #86efac; }
-.summary-metric.cpr-virgin .sm-value { color: #dcfce7; }
-.summary-metric.cpr-vw {
-    background: linear-gradient(145deg, #2e1065 0%, #4c1d95 100%);
-    border-left: 3px solid #a78bfa;
-}
-.summary-metric.cpr-vw .sm-label { color: #ddd6fe; }
-.summary-metric.cpr-vw .sm-value { color: #f5f3ff; }
-.summary-metric.cpr-vn {
-    background: linear-gradient(145deg, #172554 0%, #1e3a8a 100%);
-    border-left: 3px solid #60a5fa;
-}
-.summary-metric.cpr-vn .sm-label { color: #bfdbfe; }
-.summary-metric.cpr-vn .sm-value { color: #eff6ff; }
-.summary-metric.cpr-narrow {
-    background: linear-gradient(145deg, #451a03 0%, #78350f 100%);
-    border-left: 3px solid #fbbf24;
-}
-.summary-metric.cpr-narrow .sm-label { color: #fcd34d; }
-.summary-metric.cpr-narrow .sm-value { color: #fef3c7; }
-.summary-metric.cpr-cutoff {
-    background: linear-gradient(145deg, #3b0764 0%, #581c87 100%);
-    border-left: 3px solid #e879f9;
-}
-.summary-metric.cpr-cutoff .sm-label { color: #f0abfc; }
-.summary-metric.cpr-cutoff .sm-value { color: #fae8ff; font-size: 0.88rem; }
+.summary-metric.cpr-total .sm-value { color: #ffd36b; }
+.summary-metric.cpr-virgin { border-left-color: #5dbb7f; }
+.summary-metric.cpr-virgin .sm-value { color: #9fe0b8; }
+.summary-metric.cpr-vw { border-left-color: #a78bfa; }
+.summary-metric.cpr-vw .sm-value { color: #cbb8f0; }
+.summary-metric.cpr-vn { border-left-color: #60a5fa; }
+.summary-metric.cpr-vn .sm-value { color: #a9c6f2; }
+.summary-metric.cpr-narrow .sm-value { color: #ffe9b3; }
+.summary-metric.cpr-cutoff .sm-value { font-size: 0.88rem; }
 .cpr-detail-stats {
     display: flex;
     flex-wrap: wrap;
@@ -343,17 +302,34 @@ a { color: #ffd36b !important; }
     margin: 0.35rem 0 0.75rem;
     padding: 0.55rem 0.75rem;
     border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(15,23,42,0.35);
+    border: 1px solid rgba(240,184,78,.24);
+    background: rgba(14,12,8,.85);
 }
 .cpr-detail-stat {
     font-size: 0.8rem;
-    color: #cbd5e1;
+    color: #d9cfb6;
 }
 .cpr-detail-stat b {
-    color: #f8fafc;
+    color: #fff8e6;
     font-weight: 600;
 }
+.tag-disclaimer {
+    background: linear-gradient(135deg, rgba(240,184,78,.14), rgba(10,10,10,.94));
+    border: 1px solid rgba(240,184,78,.45);
+    border-left: 5px solid #f0b84e;
+    border-radius: 10px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 0.9rem;
+    box-shadow: 0 10px 26px rgba(0,0,0,.35);
+}
+.tag-disclaimer p {
+    color: #f3e3bb;
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+.tag-disclaimer strong { color: #ffd36b; }
+.tag-disclaimer a { color: #ffd36b !important; font-weight: 700; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -380,12 +356,14 @@ _INDEX_SYMBOLS = frozenset({"VIX", "INDIAVIX", "NIFTY", "BANKNIFTY", "SENSEX"})
 _DISCLAIMER_SIDEBAR = """
 **Not financial advice.** For informational, educational, and research use only.
 
-- Scan results are **algorithmic outputs** — not buy/sell recommendations  
-- Trading securities involves **substantial risk of loss**  
-- Market data may be **delayed, incomplete, or inaccurate**  
-- Past breakouts do **not** guarantee future performance  
-- Authors are **not** SEBI-registered investment advisers  
-- Consult a **qualified financial adviser** before trading  
+- Scan results are **algorithmic outputs** — not buy/sell recommendations
+- Signals are generated **automatically, without human review**
+- Trading securities involves **substantial risk of loss** — use only risk capital
+- Market data may be **delayed, incomplete, or inaccurate**
+- Past breakouts do **not** guarantee future performance
+- TAG is **not** a SEBI-registered Investment Adviser or Research Analyst
+- No fiduciary or adviser–client relationship is created by using this app
+- Consult a **qualified, SEBI-registered financial adviser** before trading
 
 [Full disclaimer]({url})
 """.format(
@@ -396,17 +374,26 @@ _DISCLAIMER_SIDEBAR = """
 def _render_disclaimer_banner() -> None:
     st.markdown(
         f"""
-<div style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);
-border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem;">
-<p style="color:#fde68a;margin:0;font-size:0.88rem;line-height:1.5;">
-<strong>⚠️ Disclaimer:</strong> This app is for <strong>research and education only</strong> — not investment advice.
-Breakout signals are not recommendations to trade. You may lose capital. Data from third-party sources
-may be delayed or wrong.
-<a href="{DISCLAIMER_URL}" target="_blank" rel="noopener" style="color:#fcd34d;">Read full disclaimer</a>
+<div class="tag-disclaimer">
+<p>
+<strong>⚠️ Disclaimer — read before using:</strong> This app is for <strong>research and education
+only</strong>. It is <strong>not investment advice</strong> and not a recommendation to buy or sell any
+security. TAG (Trade And Grow) is <strong>not a SEBI-registered Investment Adviser or Research
+Analyst</strong>. Signals are <strong>algorithmic outputs</strong> generated without human review from
+third-party data that may be delayed, incomplete, or wrong. Trading involves
+<strong>substantial risk of loss</strong> — use only risk capital and consult a qualified,
+SEBI-registered adviser before acting.
+<a href="{DISCLAIMER_URL}" target="_blank" rel="noopener">Read full disclaimer</a>
 </p></div>
 """,
         unsafe_allow_html=True,
     )
+    with st.expander("⚖️ Full legal disclaimer (tap to read in-app)"):
+        disclaimer_path = ROOT_DIR / "DISCLAIMER.md"
+        if disclaimer_path.exists():
+            st.markdown(disclaimer_path.read_text(encoding="utf-8"))
+        else:
+            st.markdown(f"[Read the full disclaimer on GitHub]({DISCLAIMER_URL})")
 
 
 def _render_disclaimer_sidebar() -> None:
@@ -535,16 +522,16 @@ def _render_last_scan_panel(meta: dict, results: pd.DataFrame | None = None) -> 
 
     st.markdown(
         f"""
-<div style="background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.35);
-border-radius:10px;padding:0.85rem 1.1rem;margin-bottom:0.85rem;">
-<p style="color:#93c5fd;margin:0 0 0.35rem;font-size:0.95rem;font-weight:700;">
+<div style="background:linear-gradient(135deg, rgba(240,184,78,.12), rgba(10,10,10,.92));
+border:1px solid rgba(240,184,78,.38);border-radius:10px;padding:0.85rem 1.1rem;margin-bottom:0.85rem;">
+<p style="color:#ffd36b;margin:0 0 0.35rem;font-size:0.95rem;font-weight:700;">
 🕒 Last scanned: {scanned_at}
 </p>
-<p style="color:#cbd5e1;margin:0;font-size:0.84rem;line-height:1.55;">
+<p style="color:#d9cfb6;margin:0;font-size:0.84rem;line-height:1.55;">
 <strong>{n_breakouts}</strong> breakouts · <strong>{universe_txt}</strong> ·
 <strong>{timeframes or "—"}</strong> · <strong>{mode}</strong>
 </p>
-<p style="color:#94a3b8;margin:0.35rem 0 0;font-size:0.76rem;">
+<p style="color:#b3a175;margin:0.35rem 0 0;font-size:0.76rem;">
 Cached locally in <code>data_cache/scan_results.csv</code> and <code>data_cache/scan_info.csv</code>
 </p>
 </div>
@@ -556,17 +543,25 @@ Cached locally in <code>data_cache/scan_results.csv</code> and <code>data_cache/
 def _render_disclaimer_footer() -> None:
     st.markdown(
         f"""
----
-<p style="font-size:0.75rem;color:#94a3b8;line-height:1.55;margin-top:1.5rem;">
-<strong>Disclaimer:</strong> The TAG Breakout Scanner is provided for informational and educational
-purposes only. It does not constitute investment, trading, tax, or legal advice and does not create an
-adviser–client relationship. Trading in securities involves substantial risk of loss. Algorithmic scan
-outputs are based on historical data and may be inaccurate. Past performance is not indicative of future
-results. Use at your own risk.
-<a href="{DISCLAIMER_URL}" target="_blank" rel="noopener" style="color:#94a3b8;">Full disclaimer</a>
-·
-<a href="{PUBLISHED_URL}" style="color:#f0b84e;">Live app</a>
+<div style="margin-top:2rem;padding:1rem 1.2rem;border-top:1px solid rgba(240,184,78,.40);
+background:linear-gradient(180deg, rgba(240,184,78,.06), rgba(6,6,6,.95));border-radius:0 0 10px 10px;">
+<p style="font-size:0.78rem;color:#c5b38a;line-height:1.6;margin:0;">
+<strong style="color:#ffd36b;">⚖️ Disclaimer:</strong> The TAG Breakout Scanner is provided for
+informational, educational, and research purposes only. It does not constitute investment, trading, tax,
+or legal advice and does not create an adviser–client or fiduciary relationship. TAG (Trade And Grow) and
+the authors are <strong style="color:#ffd36b;">not SEBI-registered</strong> Investment Advisers, Research
+Analysts, or broker-dealers. Signals are automated algorithmic outputs from historical third-party data
+(Yahoo Finance / NSE) that may be delayed, incomplete, or inaccurate. Trading securities involves
+substantial risk of loss — you may lose all invested capital. Past breakouts and hypothetical results are
+not indicative of future performance. You are solely responsible for your trading decisions; consult a
+qualified, SEBI-registered financial adviser before acting.
+<a href="{DISCLAIMER_URL}" target="_blank" rel="noopener" style="color:#ffd36b;">Full disclaimer</a>
 </p>
+<p style="font-size:0.72rem;color:#8f8259;margin:0.5rem 0 0;">
+© 2026 TAG · Trade And Grow · MIT License ·
+<a href="{PUBLISHED_URL}" style="color:#f0b84e;">tag-breakoutscanner.streamlit.app</a>
+</p>
+</div>
 """,
         unsafe_allow_html=True,
     )
@@ -1176,6 +1171,7 @@ Today's CPR from yesterday's OHLC. <strong>Virgin</strong> = price has not touch
             mime="text/csv",
             key="cpr_download",
         )
+        st.caption("⚖️ Exported data is for research use only — not a recommendation to trade.")
 
 
 def render_breakout_tab(
@@ -1333,6 +1329,7 @@ def render_breakout_tab(
                         mime="text/csv",
                         key=f"dl_{key}",
                     )
+                    st.caption("⚖️ Exported data is for research use only — not a recommendation to trade.")
 
             with tf_tabs[0]:
                 _show(results, "all")
