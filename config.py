@@ -33,6 +33,7 @@ SCAN_META_JSON = DATA_DIR / "scan_meta.json"
 CPR_SCAN_RESULTS_CSV = DATA_DIR / "cpr_scan_results.csv"
 CPR_SCAN_INFO_CSV = DATA_DIR / "cpr_scan_info.csv"
 CPR_SCAN_META_JSON = DATA_DIR / "cpr_scan_meta.json"
+HISTORY_DIR = DATA_DIR / "history"
 
 LOOKBACK_DAYS = 400
 
@@ -167,5 +168,6 @@ def sort_timeframes(timeframes: list[str] | tuple[str, ...]) -> list[str]:
 
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DAILY.mkdir(parents=True, exist_ok=True)
     CACHE_HOURLY.mkdir(parents=True, exist_ok=True)

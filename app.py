@@ -33,7 +33,9 @@ from results_store import (
     cached_cpr_scan_available,
     cached_scan_available,
     format_scanned_at,
+    list_history_dates,
     load_cpr_results,
+    load_history,
     load_scan_results,
     save_cpr_results,
     save_scan_results,
@@ -1174,6 +1176,160 @@ Today's CPR from yesterday's OHLC. <strong>Virgin</strong> = price has not touch
         st.caption("⚖️ Exported data is for research use only — not a recommendation to trade.")
 
 
+def _review_table(df: pd.DataFrame, kind: str) -> pd.DataFrame:
+    out = pd.DataFrame(index=df.index)
+    if kind == "breakout":
+        out["Symbol"] = df["symbol"]
+        out["TF"] = df["timeframe"]
+        out["Direction"] = df["direction"].astype(str).str.title()
+        out["Close ₹"] = pd.to_numeric(df["close"], errors="coerce").map(lambda v: f"{v:,.2f}")
+        out["Break %"] = pd.to_numeric(df["breakout_pct"], errors="coerce").map(lambda v: f"{v:+.2f}%")
+        if "volume_ratio" in df.columns:
+            out["Vol ×"] = pd.to_numeric(df["volume_ratio"], errors="coerce").map(
+                lambda v: f"{v:.2f}×" if pd.notna(v) else "—"
+            )
+        out["Level ₹"] = pd.to_numeric(df["level"], errors="coerce").map(lambda v: f"{v:,.2f}")
+        if "bar_time" in df.columns:
+            out["Bar date"] = df["bar_time"].astype(str)
+    else:
+        out["Symbol"] = df["symbol"]
+        if "type" in df.columns:
+            out["Type"] = df["type"]
+        if "ltp" in df.columns:
+            out["LTP ₹"] = pd.to_numeric(df["ltp"], errors="coerce").map(
+                lambda v: f"{v:,.2f}" if pd.notna(v) else "—"
+            )
+        if "width_pct" in df.columns:
+            out["Width %"] = pd.to_numeric(df["width_pct"], errors="coerce").map(
+                lambda v: f"{v:.2f}%" if pd.notna(v) else "—"
+            )
+        if "width_percentile" in df.columns:
+            out["Width %ile"] = pd.to_numeric(df["width_percentile"], errors="coerce").map(
+                lambda v: f"{v:.0f}" if pd.notna(v) else "—"
+            )
+        if "distance_pct" in df.columns:
+            out["Dist %"] = pd.to_numeric(df["distance_pct"], errors="coerce").map(
+                lambda v: f"{v:+.2f}%" if pd.notna(v) else "—"
+            )
+    if "scanned_at" in df.columns:
+        out["Scanned (IST)"] = df["scanned_at"].map(lambda v: format_scanned_at(v, short=True))
+    return out
+
+
+def render_daily_review_tab() -> None:
+    st.markdown("#### 📅 Daily Review — top picks by category")
+    st.caption(
+        "⚖️ The day's algorithmic scan output grouped for review, with scan date & time (IST). "
+        "Research only — not trade recommendations."
+    )
+
+    hist_dates = sorted(set(list_history_dates("breakout")) | set(list_history_dates("cpr")), reverse=True)
+
+    if hist_dates:
+        day = st.selectbox(
+            "Review date",
+            hist_dates,
+            format_func=lambda d: d.strftime("%A, %d %b %Y"),
+            key="review_date",
+        )
+        bdf = load_history("breakout", day)
+        cdf = load_history("cpr", day)
+    else:
+        st.info(
+            "No scan history recorded yet — showing the latest cached scan. "
+            "A dated history entry is written automatically on every **Force Refresh Scan**."
+        )
+        bdf, _ = load_scan_results()
+        cdf, _ = load_cpr_results()
+
+    if (bdf is None or bdf.empty) and (cdf is None or cdf.empty):
+        st.warning("Nothing to review for this date.")
+        return
+
+    stamps: list[str] = []
+    for df in (bdf, cdf):
+        if df is not None and "scanned_at" in df.columns:
+            stamps.extend(str(v) for v in df["scanned_at"].dropna().unique())
+    if stamps:
+        stamps = sorted(set(stamps))
+        st.markdown(
+            f"🕒 **{len(stamps)}** scan run(s) · first **{format_scanned_at(stamps[0], short=True)}** · "
+            f"last **{format_scanned_at(stamps[-1], short=True)}** IST"
+        )
+
+    top_n = st.slider("Top picks per category", 3, 15, 5, key="review_top_n")
+
+    sections: list[tuple[str, pd.DataFrame, str]] = []
+
+    if bdf is not None and not bdf.empty:
+        b = bdf.copy()
+        b["breakout_pct"] = pd.to_numeric(b["breakout_pct"], errors="coerce")
+        vol = pd.to_numeric(b["volume_ratio"], errors="coerce") if "volume_ratio" in b.columns else 1.0
+        b["_score"] = b["breakout_pct"].abs() * pd.Series(vol, index=b.index).fillna(1.0)
+        if "scanned_at" in b.columns:
+            # keep only the latest signal per symbol/timeframe/direction across the day's runs
+            b = b.sort_values("scanned_at").drop_duplicates(
+                subset=["symbol", "timeframe", "direction"], keep="last"
+            )
+        for tf in [t for t in TIMEFRAME_ORDER if t in set(b["timeframe"])]:
+            for direction, icon in (("bullish", "🟢"), ("bearish", "🔴")):
+                sub = b[(b["timeframe"] == tf) & (b["direction"].astype(str).str.lower() == direction)]
+                if not sub.empty:
+                    label = TIMEFRAMES[tf].label if tf in TIMEFRAMES else tf
+                    sections.append((f"{icon} {direction.title()} · {label}", sub, "breakout"))
+        if "is_52w_high" in b.columns and b["is_52w_high"].any():
+            sections.append(("🏆 52-Week High breaks", b[b["is_52w_high"]], "breakout"))
+        if "mode" in b.columns:
+            strict = b[b["mode"].astype(str).str.lower() == "strict"]
+            if not strict.empty:
+                sections.append(("💪 Strict-mode passes", strict, "breakout"))
+
+    if cdf is not None and not cdf.empty:
+        c = cdf.copy()
+        if "scanned_at" in c.columns:
+            c = c.sort_values("scanned_at").drop_duplicates(subset=["symbol"], keep="last")
+        width_pctile = (
+            pd.to_numeric(c["width_percentile"], errors="coerce") if "width_percentile" in c.columns else None
+        )
+        # narrower CPR ranks higher for review priority
+        c["_score"] = -(width_pctile.fillna(100.0)) if width_pctile is not None else 0.0
+        if "is_virgin" in c.columns and c["is_virgin"].any():
+            sections.append(("✨ Virgin CPR", c[c["is_virgin"]], "cpr"))
+        if "type" in c.columns:
+            for cpr_type, label in (("V+W", "🟣 Virgin + Wide CPR"), ("V+N", "🔵 Virgin + Narrow CPR")):
+                sub = c[c["type"].astype(str) == cpr_type]
+                if not sub.empty:
+                    sections.append((label, sub, "cpr"))
+        if "is_narrow" in c.columns and c["is_narrow"].any():
+            sections.append(("📏 Narrow CPR", c[c["is_narrow"]], "cpr"))
+
+    if not sections:
+        st.warning("No categorised signals for this date.")
+        return
+
+    cols = st.columns(2)
+    for i, (title, sub, kind) in enumerate(sections):
+        with cols[i % 2]:
+            ranked = sub.sort_values("_score", ascending=False)
+            st.markdown(f"##### {title} — {len(ranked)}")
+            st.dataframe(
+                _review_table(ranked.head(top_n), kind),
+                hide_index=True,
+                use_container_width=True,
+                key=f"review_{i}",
+            )
+            if len(ranked) > top_n:
+                with st.expander(f"All {len(ranked)} in this category"):
+                    st.dataframe(
+                        _review_table(ranked, kind),
+                        hide_index=True,
+                        use_container_width=True,
+                        key=f"review_all_{i}",
+                    )
+
+    st.caption("⚖️ Ranked by |break %| × volume ratio (breakouts) and narrowest width percentile (CPR).")
+
+
 def render_breakout_tab(
     scan_symbols: list[str],
     *,
@@ -1454,7 +1610,7 @@ with st.sidebar:
 
     _render_disclaimer_sidebar()
 
-tab_breakout, tab_cpr = st.tabs(["Breakout Scanner", "CPR Scanner"])
+tab_breakout, tab_cpr, tab_review = st.tabs(["Breakout Scanner", "CPR Scanner", "📅 Daily Review"])
 
 with tab_breakout:
     render_breakout_tab(
@@ -1471,6 +1627,9 @@ with tab_cpr:
         universe_total=universe_total,
         universe_sample=universe_sample,
     )
+
+with tab_review:
+    render_daily_review_tab()
 
 _render_disclaimer_footer()
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -14,6 +14,7 @@ from config import (
     CPR_SCAN_INFO_CSV,
     CPR_SCAN_META_JSON,
     CPR_SCAN_RESULTS_CSV,
+    HISTORY_DIR,
     SCAN_INFO_CSV,
     SCAN_META_JSON,
     SCAN_RESULTS_CSV,
@@ -62,6 +63,52 @@ def format_scanned_at(iso_value: str | datetime | None, *, short: bool = False) 
         return str(iso_value)
 
 
+def _history_path(kind: str, day: "date") -> Path:
+    return HISTORY_DIR / f"{kind}_{day.isoformat()}.csv"
+
+
+def append_scan_history(out: pd.DataFrame, *, kind: str, scanned_at: datetime) -> None:
+    """Append one scan run to the dated history file for `kind` (best-effort)."""
+    try:
+        path = _history_path(kind, scanned_at.date())
+        if path.is_file():
+            prev = pd.read_csv(path)
+            combined = pd.concat([prev, out], ignore_index=True)
+        else:
+            combined = out
+        combined.to_csv(path, index=False)
+    except Exception:
+        pass  # history must never break a scan save
+
+
+def list_history_dates(kind: str) -> list["date"]:
+    """Dates (newest first) that have a history file for `kind`."""
+    if not HISTORY_DIR.is_dir():
+        return []
+    dates = []
+    for f in HISTORY_DIR.glob(f"{kind}_*.csv"):
+        try:
+            dates.append(date.fromisoformat(f.stem.removeprefix(f"{kind}_")))
+        except ValueError:
+            continue
+    return sorted(dates, reverse=True)
+
+
+def load_history(kind: str, day: "date") -> Optional[pd.DataFrame]:
+    """Load all scan runs recorded on `day` for `kind`."""
+    path = _history_path(kind, day)
+    if not path.is_file():
+        return None
+    try:
+        df = pd.read_csv(path)
+        for col in _BOOL_COLS + _CPR_BOOL_COLS:
+            if col in df.columns:
+                df[col] = df[col].map(_parse_bool)
+        return df
+    except Exception:
+        return None
+
+
 def save_scan_results(df: pd.DataFrame, meta: dict[str, Any]) -> Path:
     """Write scan results, scan_info.csv, and metadata JSON to data_cache/."""
     ensure_dirs()
@@ -72,6 +119,7 @@ def save_scan_results(df: pd.DataFrame, meta: dict[str, Any]) -> Path:
     out = df.copy()
     out["scanned_at"] = scanned_iso
     out.to_csv(SCAN_RESULTS_CSV, index=False)
+    append_scan_history(out, kind="breakout", scanned_at=scanned_at)
 
     timeframes = meta.get("timeframes") or []
     if isinstance(timeframes, list):
@@ -182,6 +230,7 @@ def save_cpr_results(df: pd.DataFrame, meta: dict[str, Any]) -> Path:
     out = df.copy()
     out["scanned_at"] = scanned_iso
     out.to_csv(CPR_SCAN_RESULTS_CSV, index=False)
+    append_scan_history(out, kind="cpr", scanned_at=scanned_at)
 
     info_row = {
         "scanned_at": scanned_iso,
