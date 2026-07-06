@@ -719,12 +719,14 @@ def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
                 "CE/PE": p.opt_type,
                 "Strike": f"{p.strike:g}",
                 "Expiry": p.expiry,
-                "Opt LTP ₹": f"{p.option_ltp:,.2f}" if p.option_ltp is not None else "—",
-                "Entry ₹": f"{p.entry:,.2f}",
-                "TP1 ₹": f"{p.tps[0]:,.2f}",
-                "TP2 ₹": f"{p.tps[1]:,.2f}",
-                "TP3 ₹": f"{p.tps[2]:,.2f}",
-                "SL ₹": f"{p.sl:,.2f}",
+                "Prem Entry ₹": f"{p.option_ltp:,.2f}" if p.option_ltp is not None else "—",
+                "Prem TP1/2/3 ₹": (
+                    " / ".join(f"{v:,.2f}" for v in p.prem_tps) if p.prem_tps else "—"
+                ),
+                "Prem SL ₹": f"{p.prem_sl:,.2f}" if p.prem_sl is not None else "—",
+                "Spot Entry ₹": f"{p.entry:,.2f}",
+                "Spot TP1/2/3 ₹": " / ".join(f"{v:,.2f}" for v in p.tps),
+                "Spot SL ₹": f"{p.sl:,.2f}",
                 "Scanned (IST)": format_scanned_at(scanned, short=True) if scanned and pd.notna(scanned) else "—",
                 "Source": "NSE live" if p.live else "estimated",
             }
@@ -732,10 +734,17 @@ def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True, key=f"fno_plan_{key}")
     if len(plan_df) > len(capped):
         st.caption(f"Showing first {len(capped)} of {len(plan_df)} F&O signals.")
+    if not live:
+        st.info(
+            "💡 **Premium columns need live NSE data** — turn on the toggle above (works when NSE is "
+            "reachable, e.g. running locally in India). Premiums are never estimated offline."
+        )
     st.caption(
-        "⚖️ Rule-based levels on the **underlying** (entry = scan close · SL = break level ∓0.5% · "
-        "TP1/2/3 = 1R/2R/3R · ATM strike, nearest expiry). Bullish → CE, bearish → PE. "
-        "Algorithmic template for research — **not** trade advice; verify option liquidity and margins with your broker."
+        "⚖️ **Prem** = option premium: entry is the live NSE LTP; TP/SL premiums are Black–Scholes "
+        "repricings of the same option at each spot target (chain IV, anchored to the LTP, no time decay). "
+        "**Spot** = underlying levels: entry = scan close · SL = break level ∓0.5% · TP1/2/3 = 1R/2R/3R · "
+        "ATM strike, nearest expiry · bullish → CE, bearish → PE. Algorithmic template for research — "
+        "**not** trade advice; verify option liquidity and margins with your broker."
     )
 
 

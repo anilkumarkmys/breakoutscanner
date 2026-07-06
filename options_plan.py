@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from math import exp, log, sqrt
+from statistics import NormalDist
 from typing import Any, Optional
 
 import requests
@@ -31,6 +33,48 @@ _HEADERS = {
 # SL sits 0.5% beyond the broken level; targets are 1R/2R/3R from entry.
 SL_BUFFER = 0.005
 TP_MULTIPLES = (1.0, 2.0, 3.0)
+RISK_FREE_RATE = 0.065  # approx. RBI repo; short-dated options are insensitive to it
+MIN_PREMIUM = 0.05  # NSE option tick floor
+
+_NORM = NormalDist()
+
+
+def _bs_price(spot: float, strike: float, t_years: float, iv: float, opt_type: str) -> float:
+    """Black-Scholes European price; intrinsic value at/after expiry."""
+    call = opt_type.upper() == "CE"
+    if t_years <= 0 or iv <= 0:
+        return max(spot - strike, 0.0) if call else max(strike - spot, 0.0)
+    d1 = (log(spot / strike) + (RISK_FREE_RATE + iv * iv / 2) * t_years) / (iv * sqrt(t_years))
+    d2 = d1 - iv * sqrt(t_years)
+    disc = exp(-RISK_FREE_RATE * t_years)
+    if call:
+        return spot * _NORM.cdf(d1) - strike * disc * _NORM.cdf(d2)
+    return strike * disc * _NORM.cdf(-d2) - spot * _NORM.cdf(-d1)
+
+
+def _implied_vol(price: float, spot: float, strike: float, t_years: float, opt_type: str) -> Optional[float]:
+    """Back out IV from a market premium by bisection; None if unpriceable."""
+    if price <= 0 or t_years <= 0:
+        return None
+    lo, hi = 0.01, 3.0
+    if not (_bs_price(spot, strike, t_years, lo, opt_type) <= price <= _bs_price(spot, strike, t_years, hi, opt_type)):
+        return None
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if _bs_price(spot, strike, t_years, mid, opt_type) < price:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def _years_to_expiry(expiry_label: str, today: Optional[date] = None) -> Optional[float]:
+    try:
+        exp_date = datetime.strptime(expiry_label.strip(), "%d-%b-%Y").date()
+    except ValueError:
+        return None
+    days = ((exp_date - (today or date.today())).days) or 1
+    return max(days, 1) / 365.0
 
 
 @dataclass
@@ -40,11 +84,14 @@ class OptionPlan:
     opt_type: str  # CE / PE
     strike: float
     expiry: str
-    option_ltp: Optional[float]
-    entry: float
+    option_ltp: Optional[float]  # premium entry (market LTP)
+    entry: float  # spot levels
     sl: float
     tps: tuple[float, ...]
     live: bool  # strike/expiry/LTP from NSE (True) or estimated (False)
+    prem_tps: Optional[tuple[float, ...]] = None  # premium at spot TPs
+    prem_sl: Optional[float] = None  # premium at spot SL
+    iv: Optional[float] = None  # IV used for the premium mapping
 
 
 def fetch_option_chain(symbol: str, timeout: float = 6.0) -> Optional[dict[str, Any]]:
@@ -122,6 +169,7 @@ def build_plan(
     expiry: Optional[str] = None
     option_ltp: Optional[float] = None
     live = False
+    chain_iv: Optional[float] = None
 
     if chain:
         try:
@@ -137,11 +185,33 @@ def build_plan(
                         leg = r.get(opt_type)
                         if leg and leg.get("lastPrice") is not None:
                             option_ltp = float(leg["lastPrice"])
+                            iv_raw = leg.get("impliedVolatility")
+                            if iv_raw:
+                                chain_iv = float(iv_raw) / 100.0
                         break
                 live = True
         except Exception:
             strike = expiry = option_ltp = None
             live = False
+
+    # Premium ladder: reprice the option at each spot target with Black-Scholes,
+    # anchored to the live market LTP (no time decay assumed). Only when live.
+    prem_tps: Optional[tuple[float, ...]] = None
+    prem_sl: Optional[float] = None
+    used_iv: Optional[float] = None
+    if live and option_ltp and option_ltp > 0 and strike and expiry:
+        t_years = _years_to_expiry(expiry)
+        if t_years:
+            used_iv = chain_iv or _implied_vol(option_ltp, entry, float(strike), t_years, opt_type)
+            if used_iv:
+                base = _bs_price(entry, float(strike), t_years, used_iv, opt_type)
+
+                def _prem_at(spot: float) -> float:
+                    model = _bs_price(spot, float(strike), t_years, used_iv, opt_type)
+                    return round(max(option_ltp + (model - base), MIN_PREMIUM), 2)
+
+                prem_tps = tuple(_prem_at(tp) for tp in tps)
+                prem_sl = _prem_at(sl)
 
     if strike is None:
         step = estimate_strike_step(entry)
@@ -160,4 +230,7 @@ def build_plan(
         sl=round(sl, 2),
         tps=tps,
         live=live,
+        prem_tps=prem_tps,
+        prem_sl=prem_sl,
+        iv=used_iv,
     )
