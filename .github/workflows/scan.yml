@@ -1,0 +1,52 @@
+name: Scheduled market scan
+
+on:
+  schedule:
+    # Cron is UTC; IST = UTC+5:30. Mon-Fri only.
+    - cron: "45 4-9 * * 1-5" # 10:15-15:15 IST, hourly during market hours
+    - cron: "15 10 * * 1-5" # 15:45 IST, post-close scan
+  workflow_dispatch:
+    inputs:
+      max_symbols:
+        description: Max NIFTY 500 symbols to scan
+        default: "500"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: market-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run breakout + CPR scans
+        run: python run_ci_scan.py --max "${{ github.event.inputs.max_symbols || '500' }}"
+
+      - name: Commit results and history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data_cache/scan_results.csv data_cache/scan_info.csv data_cache/scan_meta.json \
+                  data_cache/cpr_scan_results.csv data_cache/cpr_scan_info.csv data_cache/cpr_scan_meta.json \
+                  data_cache/history
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Scheduled scan: $(TZ=Asia/Kolkata date +'%d %b %Y, %I:%M %p IST')"
+            git pull --rebase origin main
+            git push origin main
+          fi

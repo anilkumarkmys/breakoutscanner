@@ -6,8 +6,16 @@ __pycache__/
 venv/
 .env
 
-# Local caches (downloaded on first run)
-data_cache/
+# Local caches (downloaded on first run) — but scan results and history
+# are committed by the scheduled GitHub Action so the hosted app gets them
+data_cache/*
+!data_cache/scan_results.csv
+!data_cache/scan_info.csv
+!data_cache/scan_meta.json
+!data_cache/cpr_scan_results.csv
+!data_cache/cpr_scan_info.csv
+!data_cache/cpr_scan_meta.json
+!data_cache/history/
 
 # IDE / OS
 .idea/

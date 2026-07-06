@@ -1,0 +1,6 @@
+symbol,timeframe,direction,mode,close,level,breakout_pct,volume_ratio,prior_high,prior_low,bar_time,lookback,is_52w_high,strong_close,scanned_at
+BANDHANBNK,1H,bullish,standard,208.78,207.63,0.55,2.15,207.63,198.36,2026-07-06,20,False,True,2026-07-06T23:05:14+05:30
+KARURVYSYA,1H,bullish,standard,306.3,303.05,1.07,2.03,303.05,288.9,2026-07-06,20,False,True,2026-07-06T23:05:14+05:30
+RADICO,1D,bullish,standard,4106.7,3986.3,3.02,2.91,3986.3,3427.1,2026-07-06,20,True,True,2026-07-06T23:05:14+05:30
+KARURVYSYA,1D,bullish,standard,304.15,302.0,0.71,1.48,302.0,268.95,2026-07-06,20,False,True,2026-07-06T23:05:14+05:30
+UNITDSPR,1D,bullish,standard,1427.3,1399.0,2.02,1.35,1399.0,1229.2,2026-07-06,20,False,True,2026-07-06T23:05:14+05:30

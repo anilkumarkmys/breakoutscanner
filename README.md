@@ -118,6 +118,17 @@ python run_scanner.py scan --max 500 -t 1D --csv breakouts.csv
 
 ---
 
+## Scheduled scans (GitHub Actions)
+
+A workflow ([.github/workflows/scan.yml](.github/workflows/scan.yml)) runs `run_ci_scan.py` on NSE market days — hourly from 10:15 to 15:15 IST plus a post-close scan at 15:45 IST — and commits the results:
+
+- `data_cache/scan_results.csv` / `cpr_scan_results.csv` — latest snapshot the app loads on start
+- `data_cache/history/<kind>_YYYY-MM-DD.csv` — dated history that powers the **📅 Daily Review** tab
+
+Each commit also triggers a Streamlit Cloud redeploy, so the hosted app refreshes itself with every scheduled scan. Run it manually from the Actions tab (`workflow_dispatch`) with a custom symbol count.
+
+---
+
 ## Configuration
 
 | Setting | Default | Description |
