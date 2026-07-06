@@ -1,12 +1,12 @@
 {
-  "symbols": 40,
+  "symbols": 150,
   "universe_total": 500,
   "universe_sample": "even",
   "universe_choice": "NIFTY 500",
   "timeframe": "Daily",
   "narrow_percentile": 5.0,
-  "scanned_at": "2026-07-06T23:05:29+05:30",
-  "scanned_at_display": "06 Jul 2026, 11:05 PM IST",
-  "saved_at": "2026-07-06T23:05:29+05:30",
-  "row_count": 40
+  "scanned_at": "2026-07-06T23:08:45+05:30",
+  "scanned_at_display": "06 Jul 2026, 11:08 PM IST",
+  "saved_at": "2026-07-06T23:08:45+05:30",
+  "row_count": 150
 }

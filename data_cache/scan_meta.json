@@ -1,5 +1,5 @@
 {
-  "symbols": 40,
+  "symbols": 150,
   "universe_total": 500,
   "universe_sample": "even",
   "universe_choice": "NIFTY 500",
@@ -15,9 +15,9 @@
   "lookback": 20,
   "atr_mult": null,
   "only_52w": false,
-  "max_symbols": 40,
-  "scanned_at": "2026-07-06T23:05:14+05:30",
-  "scanned_at_display": "06 Jul 2026, 11:05 PM IST",
-  "saved_at": "2026-07-06T23:05:14+05:30",
-  "row_count": 5
+  "max_symbols": 150,
+  "scanned_at": "2026-07-06T23:08:25+05:30",
+  "scanned_at_display": "06 Jul 2026, 11:08 PM IST",
+  "saved_at": "2026-07-06T23:08:25+05:30",
+  "row_count": 13
 }
