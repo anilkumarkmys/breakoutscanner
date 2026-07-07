@@ -387,6 +387,7 @@ _ROADMAP_SHIPPED = [
     "Virgin & Narrow CPR scanner",
     "📅 Daily Review with scan history",
     "Scheduled scans via GitHub Actions",
+    "📊 Signal audit vs real movement",
     "F&O options plan — CE/PE, strike, expiry, entry/TP/SL",
     "NIFTY 250 universe",
 ]
@@ -398,7 +399,6 @@ _ROADMAP_UPCOMING = [
     "Relative strength vs NIFTY (sector rotation)",
     "EMA crossover / RSI momentum scanner",
     "Per-stock detail view & signal history",
-    "Signal outcome tracker (returns since signal)",
     "Watchlist / starred picks",
 ]
 
@@ -1362,6 +1362,148 @@ def render_fno_tab() -> None:
         )
 
 
+def _audit_signal(row: pd.Series) -> dict | None:
+    """Compare one logged signal against real subsequent price movement."""
+    symbol = str(row["symbol"])
+    tf = str(row["timeframe"])
+    direction = str(row["direction"]).lower()
+    bullish = direction == "bullish"
+    entry = float(row["close"])
+    plan = _row_plan(row)
+
+    bars = load_bars(symbol, tf, use_cache=True)
+    if bars is None or bars.empty:
+        return None
+
+    # anchor = when the signal was logged (scan time, IST); fall back to bar date EOD
+    anchor = pd.to_datetime(row.get("scanned_at"), errors="coerce")
+    if pd.isna(anchor):
+        anchor = pd.to_datetime(str(row.get("bar_time")), errors="coerce")
+        if pd.isna(anchor):
+            return None
+        anchor = anchor + pd.Timedelta(hours=15, minutes=30)
+    if anchor.tzinfo is not None:
+        anchor = anchor.tz_convert("Asia/Kolkata").tz_localize(None)
+
+    idx = bars.index
+    try:
+        idx_cmp = idx.tz_convert("Asia/Kolkata").tz_localize(None) if idx.tz is not None else idx
+    except (TypeError, AttributeError):
+        idx_cmp = idx
+    post = bars.loc[idx_cmp > anchor]
+
+    latest = float(bars["close"].iloc[-1])
+    move_pct = (latest - entry) / entry * 100
+    pnl_pct = move_pct if bullish else -move_pct
+
+    tp_hit, sl_hit, ambiguous = 0, False, False
+    peak = entry
+    for _, b in post.iterrows():
+        hi, lo = float(b["high"]), float(b["low"])
+        peak = max(peak, hi) if bullish else min(peak, lo)
+        if bullish:
+            bar_tp = sum(hi >= tp for tp in plan.tps)
+            bar_sl = lo <= plan.sl
+        else:
+            bar_tp = sum(lo <= tp for tp in plan.tps)
+            bar_sl = hi >= plan.sl
+        if bar_sl:
+            sl_hit = True
+            if bar_tp > tp_hit:
+                ambiguous = True
+                tp_hit = bar_tp
+            break
+        tp_hit = max(tp_hit, bar_tp)
+        if tp_hit == 3:
+            break
+    peak_pct = (peak - entry) / entry * 100
+    peak_pct = peak_pct if bullish else -peak_pct
+
+    if post.empty:
+        status = "⏳ awaiting bars"
+    elif sl_hit and tp_hit == 0:
+        status = "🔴 SL hit"
+    elif sl_hit:
+        status = f"🎯 TP{tp_hit} ✓ → SL" + (" ⚠️ same bar" if ambiguous else "")
+    elif tp_hit > 0:
+        status = f"🎯 TP{tp_hit} hit"
+    else:
+        status = "⏳ running"
+
+    return {
+        "Symbol": symbol,
+        "TF": tf,
+        "Dir": "🟢" if bullish else "🔴",
+        "Signal date": str(row.get("bar_time", "") or "—"),
+        "Entry ₹": f"{entry:,.2f}",
+        "Latest ₹": f"{latest:,.2f}",
+        "P&L %": f"{pnl_pct:+.2f}%",
+        "Peak %": f"{peak_pct:+.2f}%",
+        "Status": status,
+        "_pnl": pnl_pct,
+        "_tp": tp_hit,
+        "_sl": sl_hit,
+        "_open": not sl_hit and tp_hit < 3 and not post.empty,
+    }
+
+
+def _render_signal_audit(bdf: pd.DataFrame) -> None:
+    st.divider()
+    st.markdown("##### 📊 Signal audit — suggested signals vs real movement")
+    run = st.toggle(
+        "Run audit against live prices",
+        value=False,
+        key="review_audit",
+        help="Fetches current bars for each logged signal and checks whether the rule-based "
+        "TP/SL levels were actually reached after the signal was logged.",
+    )
+    if not run:
+        return
+
+    b = bdf.copy()
+    if "scanned_at" in b.columns:
+        b = b.sort_values("scanned_at").drop_duplicates(subset=["symbol", "timeframe", "direction"], keep="last")
+    b = b.head(30)
+
+    results = []
+    progress = st.progress(0.0, text="Auditing signals…")
+    for i, (_, row) in enumerate(b.iterrows(), start=1):
+        try:
+            audited = _audit_signal(row)
+        except Exception:
+            audited = None
+        if audited:
+            results.append(audited)
+        progress.progress(i / len(b), text=f"Auditing {row['symbol']} ({i}/{len(b)})…")
+    progress.empty()
+
+    if not results:
+        st.warning("Could not audit any signals (no price data).")
+        return
+
+    adf = pd.DataFrame(results)
+    n_tp = int((adf["_tp"] > 0).sum())
+    n_sl = int(adf["_sl"].sum())
+    n_open = int(adf["_open"].sum())
+    avg_pnl = adf["_pnl"].mean()
+    st.markdown(
+        f"**{len(adf)}** audited · 🎯 **{n_tp}** reached ≥ TP1 · 🔴 **{n_sl}** hit SL · "
+        f"⏳ **{n_open}** running · avg underlying P&L **{avg_pnl:+.2f}%**"
+    )
+    st.dataframe(
+        adf.drop(columns=["_pnl", "_tp", "_sl", "_open"]),
+        hide_index=True,
+        use_container_width=True,
+        key="review_audit_table",
+    )
+    st.caption(
+        "⚖️ Audit of **logged signals only**, on the underlying: P&L assumes entry at the scan close, "
+        "direction-adjusted; TP/SL checks walk the real bars recorded **after** each signal's scan time. "
+        "Same-bar TP+SL is flagged ⚠️ (order unknowable from bar data). Historical observation — not a "
+        "performance promise."
+    )
+
+
 def render_daily_review_tab() -> None:
     st.markdown("#### 📅 Daily Review — top picks by category")
     st.caption(
@@ -1474,6 +1616,9 @@ def render_daily_review_tab() -> None:
                     )
 
     st.caption("⚖️ Ranked by |break %| × volume ratio (breakouts) and narrowest width percentile (CPR).")
+
+    if bdf is not None and not bdf.empty:
+        _render_signal_audit(bdf)
 
 
 def render_breakout_tab(
