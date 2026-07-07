@@ -693,12 +693,35 @@ def _fno_symbols() -> frozenset[str]:
     return st.session_state.fno_symbols
 
 
+def _signal_score(row: pd.Series) -> float:
+    """Signal strength: |break %| × volume ratio, boosted 1.25× each for a
+    52-week-high break and a strict-mode pass."""
+    bp = pd.to_numeric(row.get("breakout_pct"), errors="coerce")
+    vol = pd.to_numeric(row.get("volume_ratio"), errors="coerce")
+    score = (abs(float(bp)) if pd.notna(bp) else 0.0) * (float(vol) if pd.notna(vol) else 1.0)
+    if _parse_bool_value(row.get("is_52w_high", False)):
+        score *= 1.25
+    if str(row.get("mode", "")).lower() == "strict":
+        score *= 1.25
+    return score
+
+
+def _signal_grade(row: pd.Series) -> str:
+    score = _signal_score(row)
+    for grade, cut in (("A+", 20.0), ("A", 8.0), ("B", 3.0)):
+        if score >= cut:
+            return grade
+    return "C"
+
+
 def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
     """F&O-only view: CE/PE, strike, expiry, option LTP and rule-based
     entry/TP/SL on the underlying — general stock columns omitted."""
-    plan_df = df[df["symbol"].astype(str).str.upper().isin(_fno_symbols())]
+    plan_df = df[df["symbol"].astype(str).str.upper().isin(_fno_symbols())].copy()
     if plan_df.empty:
         return
+    plan_df["_score"] = plan_df.apply(_signal_score, axis=1)
+    plan_df = plan_df.sort_values("_score", ascending=False)
 
     st.markdown(f"##### 🎯 F&O options plan — {len(plan_df)} signal(s)")
     live = st.toggle(
@@ -718,6 +741,7 @@ def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
         rows.append(
             {
                 "Symbol": p.symbol,
+                "Grade": _signal_grade(r),
                 "TF": r.get("timeframe", ""),
                 "Signal date": str(r.get("bar_time", "") or "—"),
                 "CE/PE": p.opt_type,
@@ -744,11 +768,14 @@ def _render_fno_plan(df: pd.DataFrame, key: str) -> None:
             "reachable, e.g. running locally in India). Premiums are never estimated offline."
         )
     st.caption(
-        "⚖️ **Prem** = option premium: entry is the live NSE LTP; TP/SL premiums are Black–Scholes "
+        "⚖️ **Grade** = signal strength, rule-based: |break %| × volume ratio, ×1.25 each for a 52W-high "
+        "break and a strict-mode pass — A+ ≥ 20 · A ≥ 8 · B ≥ 3 · C below (table sorted by it). "
+        "**Prem** = option premium: entry is the live NSE LTP; TP/SL premiums are Black–Scholes "
         "repricings of the same option at each spot target (chain IV, anchored to the LTP, no time decay). "
         "**Spot** = underlying levels: entry = scan close · SL = break level ∓0.5% · TP1/2/3 = 1R/2R/3R · "
-        "ATM strike, nearest expiry · bullish → CE, bearish → PE. Algorithmic template for research — "
-        "**not** trade advice; verify option liquidity and margins with your broker."
+        "ATM strike, nearest expiry · bullish → CE, bearish → PE. A grade measures breakout-bar strength, "
+        "not probability of profit. Algorithmic template for research — **not** trade advice; verify "
+        "option liquidity and margins with your broker."
     )
 
 
