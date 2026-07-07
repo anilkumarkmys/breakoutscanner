@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -1462,7 +1463,8 @@ def _render_signal_audit(bdf: pd.DataFrame) -> None:
 
     b = bdf.copy()
     if "scanned_at" in b.columns:
-        b = b.sort_values("scanned_at").drop_duplicates(subset=["symbol", "timeframe", "direction"], keep="last")
+        keys = [k for k in ("symbol", "timeframe", "direction", "bar_time") if k in b.columns]
+        b = b.sort_values("scanned_at").drop_duplicates(subset=keys, keep="last")
     b = b.head(30)
 
     results = []
@@ -1514,14 +1516,50 @@ def render_daily_review_tab() -> None:
     hist_dates = sorted(set(list_history_dates("breakout")) | set(list_history_dates("cpr")), reverse=True)
 
     if hist_dates:
-        day = st.selectbox(
-            "Review date",
-            hist_dates,
-            format_func=lambda d: d.strftime("%A, %d %b %Y"),
-            key="review_date",
+        mode = st.radio(
+            "Review period",
+            ["Single day", "Custom date range"],
+            horizontal=True,
+            key="review_mode",
+            label_visibility="collapsed",
         )
-        bdf = load_history("breakout", day)
-        cdf = load_history("cpr", day)
+        if mode == "Single day":
+            day = st.selectbox(
+                "Review date",
+                hist_dates,
+                format_func=lambda d: d.strftime("%A, %d %b %Y"),
+                key="review_date",
+            )
+            bdf = load_history("breakout", day)
+            cdf = load_history("cpr", day)
+        else:
+            oldest, newest = min(hist_dates), max(hist_dates)
+            default_start = max(oldest, newest - timedelta(days=6))
+            picked = st.date_input(
+                "Date range",
+                value=(default_start, newest),
+                min_value=oldest,
+                max_value=newest,
+                key="review_range",
+                help=f"History recorded since {oldest.strftime('%d %b %Y')} — every scan day is kept, "
+                "so the range can span months or years as the archive grows.",
+            )
+            if not (isinstance(picked, (tuple, list)) and len(picked) == 2):
+                st.info("Pick both a start and an end date.")
+                return
+            start, end = picked
+            days_in_range = [d for d in hist_dates if start <= d <= end]
+            if not days_in_range:
+                st.warning("No recorded scan days in that range.")
+                return
+            st.caption(
+                f"**{len(days_in_range)}** recorded day(s): "
+                f"{min(days_in_range).strftime('%d %b %Y')} → {max(days_in_range).strftime('%d %b %Y')}"
+            )
+            b_parts = [x for x in (load_history("breakout", d) for d in days_in_range) if x is not None]
+            c_parts = [x for x in (load_history("cpr", d) for d in days_in_range) if x is not None]
+            bdf = pd.concat(b_parts, ignore_index=True) if b_parts else None
+            cdf = pd.concat(c_parts, ignore_index=True) if c_parts else None
     else:
         st.info(
             "No scan history recorded yet — showing the latest cached scan. "
@@ -1555,10 +1593,10 @@ def render_daily_review_tab() -> None:
         vol = pd.to_numeric(b["volume_ratio"], errors="coerce") if "volume_ratio" in b.columns else 1.0
         b["_score"] = b["breakout_pct"].abs() * pd.Series(vol, index=b.index).fillna(1.0)
         if "scanned_at" in b.columns:
-            # keep only the latest signal per symbol/timeframe/direction across the day's runs
-            b = b.sort_values("scanned_at").drop_duplicates(
-                subset=["symbol", "timeframe", "direction"], keep="last"
-            )
+            # latest run per signal; bar_time in the key keeps each day's
+            # distinct signals when reviewing a multi-day range
+            keys = [k for k in ("symbol", "timeframe", "direction", "bar_time") if k in b.columns]
+            b = b.sort_values("scanned_at").drop_duplicates(subset=keys, keep="last")
         for tf in [t for t in TIMEFRAME_ORDER if t in set(b["timeframe"])]:
             for direction, icon in (("bullish", "🟢"), ("bearish", "🔴")):
                 sub = b[(b["timeframe"] == tf) & (b["direction"].astype(str).str.lower() == direction)]
@@ -1575,7 +1613,8 @@ def render_daily_review_tab() -> None:
     if cdf is not None and not cdf.empty:
         c = cdf.copy()
         if "scanned_at" in c.columns:
-            c = c.sort_values("scanned_at").drop_duplicates(subset=["symbol"], keep="last")
+            c_keys = [k for k in ("symbol", "session_date") if k in c.columns]
+            c = c.sort_values("scanned_at").drop_duplicates(subset=c_keys, keep="last")
         width_pctile = (
             pd.to_numeric(c["width_percentile"], errors="coerce") if "width_percentile" in c.columns else None
         )
