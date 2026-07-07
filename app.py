@@ -31,6 +31,7 @@ from cpr_scanner import apply_narrow_percentile, filter_results as filter_cpr_re
 from data_loader import load_bars, load_daily, load_universe_symbols, resolve_universe_symbols
 from fno_loader import fno_symbol_set, load_fno_symbols
 from results_store import (
+    add_to_watchlist,
     cached_cpr_scan_available,
     cached_scan_available,
     format_scanned_at,
@@ -38,6 +39,8 @@ from results_store import (
     load_cpr_results,
     load_history,
     load_scan_results,
+    load_watchlist,
+    remove_from_watchlist,
     save_cpr_results,
     save_scan_results,
 )
@@ -389,6 +392,7 @@ _ROADMAP_SHIPPED = [
     "📅 Daily Review with scan history",
     "Scheduled scans via GitHub Actions",
     "📊 Signal audit vs real movement",
+    "⭐ Watchlist with daily Top 5",
     "F&O options plan — CE/PE, strike, expiry, entry/TP/SL",
     "NIFTY 250 universe",
 ]
@@ -400,7 +404,6 @@ _ROADMAP_UPCOMING = [
     "Relative strength vs NIFTY (sector rotation)",
     "EMA crossover / RSI momentum scanner",
     "Per-stock detail view & signal history",
-    "Watchlist / starred picks",
 ]
 
 
@@ -1506,6 +1509,132 @@ def _render_signal_audit(bdf: pd.DataFrame) -> None:
     )
 
 
+def render_watchlist_tab() -> None:
+    st.markdown("#### ⭐ Watchlist & top picks")
+    st.caption(
+        "Star signals to track them over time. The Top 5 refreshes automatically with each new scan day. "
+        "Stored locally in `data_cache/watchlist.csv` — on Streamlit Cloud it resets when the app reboots."
+    )
+
+    st.markdown("##### 🏆 Top 5 of the day")
+    dates = list_history_dates("breakout")
+    if dates:
+        day = st.selectbox(
+            "Day",
+            dates,
+            format_func=lambda d: d.strftime("%A, %d %b %Y"),
+            key="wl_day",
+        )
+        hist = load_history("breakout", day)
+        if hist is None or hist.empty:
+            st.info("No breakout signals recorded for this day.")
+        else:
+            h = hist.copy()
+            h["breakout_pct"] = pd.to_numeric(h["breakout_pct"], errors="coerce")
+            vol = pd.to_numeric(h["volume_ratio"], errors="coerce") if "volume_ratio" in h.columns else None
+            h["_score"] = h["breakout_pct"].abs() * (vol.fillna(1.0) if vol is not None else 1.0)
+            keys = [k for k in ("symbol", "timeframe", "direction", "bar_time") if k in h.columns]
+            if "scanned_at" in h.columns:
+                h = h.sort_values("scanned_at").drop_duplicates(subset=keys, keep="last")
+            # one slot per stock: keep each symbol's best-scoring signal
+            top5 = (
+                h.sort_values("_score", ascending=False)
+                .drop_duplicates(subset=["symbol"], keep="first")
+                .head(5)
+            )
+            st.dataframe(
+                _review_table(top5, "breakout"),
+                hide_index=True,
+                use_container_width=True,
+                key="wl_top5",
+            )
+            st.caption("Ranked by |break %| × volume ratio; updates as the day's scheduled scans land.")
+            if st.button("⭐ Star these Top 5", key="wl_star_top5"):
+                added = add_to_watchlist(top5)
+                st.success(f"Added {added} new pick(s) to the watchlist.")
+    else:
+        st.info("No scan history yet — the Top 5 appears once a scan day is recorded.")
+
+    st.divider()
+    st.markdown("##### ⭐ My starred picks")
+    wl = load_watchlist()
+    if wl.empty:
+        st.info("Nothing starred yet — star the Top 5 above or add specific signals below.")
+    else:
+        show_status = st.toggle(
+            "Show live status (fetches current prices)",
+            value=False,
+            key="wl_status",
+        )
+        rows = []
+        for _, r in wl.iterrows():
+            bullish = str(r.get("direction", "")).lower() == "bullish"
+            base = {
+                "Symbol": r["symbol"],
+                "TF": r.get("timeframe", ""),
+                "Dir": "🟢" if bullish else "🔴",
+                "Signal date": str(r.get("bar_time", "") or "—"),
+                "Entry ₹": f"{float(r['close']):,.2f}" if pd.notna(r.get("close")) else "—",
+                "Starred": format_scanned_at(r.get("starred_at"), short=True),
+            }
+            if show_status:
+                try:
+                    audited = _audit_signal(r)
+                except Exception:
+                    audited = None
+                base["Latest ₹"] = audited["Latest ₹"] if audited else "—"
+                base["P&L %"] = audited["P&L %"] if audited else "—"
+                base["Peak %"] = audited["Peak %"] if audited else "—"
+                base["Status"] = audited["Status"] if audited else "—"
+            rows.append(base)
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True, key="wl_table")
+        st.download_button(
+            "Download watchlist CSV",
+            wl.to_csv(index=False),
+            file_name="watchlist.csv",
+            mime="text/csv",
+            key="wl_dl",
+        )
+        st.caption("⚖️ Starred picks are tracked for research review only — not positions or advice.")
+
+        labels = {
+            int(i): f"{r['symbol']} · {r.get('timeframe', '')} · {r.get('direction', '')} · {r.get('bar_time', '')}"
+            for i, r in wl.iterrows()
+        }
+        to_remove = st.multiselect(
+            "Remove picks",
+            options=list(labels.keys()),
+            format_func=lambda i: labels[i],
+            key="wl_rm",
+        )
+        if to_remove and st.button("Remove selected", key="wl_rm_btn"):
+            remove_from_watchlist(to_remove)
+            st.rerun()
+
+    st.divider()
+    with st.expander("➕ Add from current breakout signals"):
+        results = st.session_state.get("breakout_results")
+        if results is None or (isinstance(results, pd.DataFrame) and results.empty):
+            results, _ = load_scan_results()
+        if results is None or results.empty:
+            st.info("No current scan results — run a scan in the Breakout Scanner tab.")
+        else:
+            opts = {
+                int(i): f"{r['symbol']} · {r['timeframe']} · {r['direction']} · ₹{float(r['close']):,.2f} ({r.get('bar_time', '')})"
+                for i, r in results.iterrows()
+            }
+            picked = st.multiselect(
+                "Signals",
+                options=list(opts.keys()),
+                format_func=lambda i: opts[i],
+                key="wl_add_pick",
+            )
+            if picked and st.button("⭐ Add selected", key="wl_add_btn"):
+                added = add_to_watchlist(results.loc[picked])
+                st.success(f"Added {added} new pick(s).")
+                st.rerun()
+
+
 def render_daily_review_tab() -> None:
     st.markdown("#### 📅 Daily Review — top picks by category")
     st.caption(
@@ -1944,8 +2073,8 @@ with st.sidebar:
 
     _render_sidebar_roadmap()
 
-tab_breakout, tab_cpr, tab_fno, tab_review = st.tabs(
-    ["Breakout Scanner", "CPR Scanner", "🎯 F&O Plan", "📅 Daily Review"]
+tab_breakout, tab_cpr, tab_fno, tab_watchlist, tab_review = st.tabs(
+    ["Breakout Scanner", "CPR Scanner", "🎯 F&O Plan", "⭐ Watchlist", "📅 Daily Review"]
 )
 
 with tab_breakout:
@@ -1966,6 +2095,9 @@ with tab_cpr:
 
 with tab_fno:
     render_fno_tab()
+
+with tab_watchlist:
+    render_watchlist_tab()
 
 with tab_review:
     render_daily_review_tab()

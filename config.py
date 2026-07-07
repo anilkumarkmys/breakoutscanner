@@ -35,6 +35,7 @@ CPR_SCAN_RESULTS_CSV = DATA_DIR / "cpr_scan_results.csv"
 CPR_SCAN_INFO_CSV = DATA_DIR / "cpr_scan_info.csv"
 CPR_SCAN_META_JSON = DATA_DIR / "cpr_scan_meta.json"
 HISTORY_DIR = DATA_DIR / "history"
+WATCHLIST_CSV = DATA_DIR / "watchlist.csv"
 
 LOOKBACK_DAYS = 400
 

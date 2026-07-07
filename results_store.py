@@ -16,6 +16,7 @@ from config import (
     CPR_SCAN_RESULTS_CSV,
     HISTORY_DIR,
     SCAN_INFO_CSV,
+    WATCHLIST_CSV,
     SCAN_META_JSON,
     SCAN_RESULTS_CSV,
     ensure_dirs,
@@ -107,6 +108,49 @@ def load_history(kind: str, day: "date") -> Optional[pd.DataFrame]:
         return df
     except Exception:
         return None
+
+
+_WATCHLIST_KEYS = ("symbol", "timeframe", "direction", "bar_time")
+_WATCHLIST_COLUMNS = (
+    "symbol",
+    "timeframe",
+    "direction",
+    "close",
+    "level",
+    "breakout_pct",
+    "volume_ratio",
+    "bar_time",
+    "scanned_at",
+    "starred_at",
+)
+
+
+def load_watchlist() -> pd.DataFrame:
+    if not WATCHLIST_CSV.is_file():
+        return pd.DataFrame(columns=list(_WATCHLIST_COLUMNS))
+    try:
+        return pd.read_csv(WATCHLIST_CSV)
+    except Exception:
+        return pd.DataFrame(columns=list(_WATCHLIST_COLUMNS))
+
+
+def add_to_watchlist(rows: pd.DataFrame) -> int:
+    """Star signal rows; returns how many were newly added (dupes skipped)."""
+    ensure_dirs()
+    add = rows.copy()
+    add["starred_at"] = datetime.now(_DISPLAY_TZ).replace(microsecond=0).isoformat(timespec="seconds")
+    add = add[[c for c in _WATCHLIST_COLUMNS if c in add.columns]]
+    wl = load_watchlist()
+    combined = pd.concat([wl, add], ignore_index=True)
+    keys = [k for k in _WATCHLIST_KEYS if k in combined.columns]
+    combined = combined.drop_duplicates(subset=keys, keep="first")
+    combined.to_csv(WATCHLIST_CSV, index=False)
+    return len(combined) - len(wl)
+
+
+def remove_from_watchlist(indices: list[int]) -> None:
+    wl = load_watchlist()
+    wl.drop(index=[i for i in indices if i in wl.index]).to_csv(WATCHLIST_CSV, index=False)
 
 
 def save_scan_results(df: pd.DataFrame, meta: dict[str, Any]) -> Path:
