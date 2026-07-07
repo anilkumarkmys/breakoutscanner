@@ -1318,6 +1318,7 @@ def _review_table(df: pd.DataFrame, kind: str) -> pd.DataFrame:
     out = pd.DataFrame(index=df.index)
     if kind == "breakout":
         out["Symbol"] = df["symbol"]
+        out["Grade"] = df.apply(_signal_grade, axis=1)
         out["TF"] = df["timeframe"]
         out["Direction"] = df["direction"].astype(str).str.title()
         out["Close ₹"] = pd.to_numeric(df["close"], errors="coerce").map(lambda v: f"{v:,.2f}")
@@ -1575,7 +1576,10 @@ def render_watchlist_tab() -> None:
                 use_container_width=True,
                 key="wl_top5",
             )
-            st.caption("Ranked by |break %| × volume ratio; updates as the day's scheduled scans land.")
+            st.caption(
+                "Ranked by |break %| × volume ratio; updates as the day's scheduled scans land. "
+                "Grade: A+ ≥ 20 · A ≥ 8 · B ≥ 3 · C below (breakout-bar strength, not profit probability)."
+            )
             if st.button("⭐ Star these Top 5", key="wl_star_top5"):
                 added = add_to_watchlist(top5)
                 st.success(f"Added {added} new pick(s) to the watchlist.")
@@ -1598,6 +1602,7 @@ def render_watchlist_tab() -> None:
             bullish = str(r.get("direction", "")).lower() == "bullish"
             base = {
                 "Symbol": r["symbol"],
+                "Grade": _signal_grade(r),
                 "TF": r.get("timeframe", ""),
                 "Dir": "🟢" if bullish else "🔴",
                 "Signal date": str(r.get("bar_time", "") or "—"),
@@ -1810,7 +1815,10 @@ def render_daily_review_tab() -> None:
                         key=f"review_all_{i}",
                     )
 
-    st.caption("⚖️ Ranked by |break %| × volume ratio (breakouts) and narrowest width percentile (CPR).")
+    st.caption(
+        "⚖️ Ranked by |break %| × volume ratio (breakouts) and narrowest width percentile (CPR). "
+        "Grade: A+ ≥ 20 · A ≥ 8 · B ≥ 3 · C below (breakout-bar strength, not profit probability)."
+    )
 
     if bdf is not None and not bdf.empty:
         _render_signal_audit(bdf)
