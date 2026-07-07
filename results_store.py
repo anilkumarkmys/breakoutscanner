@@ -110,7 +110,9 @@ def load_history(kind: str, day: "date") -> Optional[pd.DataFrame]:
         return None
 
 
-_WATCHLIST_KEYS = ("symbol", "timeframe", "direction", "bar_time")
+# one watchlist row per stock idea: same symbol+direction is a duplicate,
+# regardless of timeframe or signal date
+_WATCHLIST_KEYS = ("symbol", "direction")
 _WATCHLIST_COLUMNS = (
     "symbol",
     "timeframe",
@@ -135,17 +137,19 @@ def load_watchlist() -> pd.DataFrame:
 
 
 def add_to_watchlist(rows: pd.DataFrame) -> int:
-    """Star signal rows; returns how many were newly added (dupes skipped)."""
+    """Star signal rows; returns how many were newly added (dupes skipped).
+    Also cleans any pre-existing duplicates in the stored file."""
     ensure_dirs()
     add = rows.copy()
     add["starred_at"] = datetime.now(_DISPLAY_TZ).replace(microsecond=0).isoformat(timespec="seconds")
     add = add[[c for c in _WATCHLIST_COLUMNS if c in add.columns]]
     wl = load_watchlist()
-    combined = pd.concat([wl, add], ignore_index=True)
-    keys = [k for k in _WATCHLIST_KEYS if k in combined.columns]
+    keys = [k for k in _WATCHLIST_KEYS if k in add.columns]
+    wl_unique = wl.drop_duplicates(subset=[k for k in _WATCHLIST_KEYS if k in wl.columns], keep="first")
+    combined = pd.concat([wl_unique, add], ignore_index=True)
     combined = combined.drop_duplicates(subset=keys, keep="first")
     combined.to_csv(WATCHLIST_CSV, index=False)
-    return len(combined) - len(wl)
+    return max(len(combined) - len(wl_unique), 0)
 
 
 def remove_from_watchlist(indices: list[int]) -> None:
