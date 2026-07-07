@@ -1323,6 +1323,45 @@ def _review_table(df: pd.DataFrame, kind: str) -> pd.DataFrame:
     return out
 
 
+def render_fno_tab() -> None:
+    st.markdown("#### 🎯 F&O options plan")
+    st.caption(
+        "Options view of the current breakout signals for F&O-listed stocks — "
+        "CE/PE, strike, expiry, premium and spot entry/TP/SL."
+    )
+
+    results = st.session_state.get("breakout_results")
+    if results is None or (isinstance(results, pd.DataFrame) and results.empty):
+        results, _ = load_scan_results()
+    if results is None or results.empty:
+        st.info("No breakout scan results yet — run **Force Refresh Scan** in the Breakout Scanner tab.")
+        return
+
+    fno_df = results[results["symbol"].astype(str).str.upper().isin(_fno_symbols())]
+    if fno_df.empty:
+        st.info("No F&O-listed stocks in the current breakout results.")
+        return
+
+    tf_options = ["All"] + [t for t in TIMEFRAME_ORDER if t in set(fno_df["timeframe"])]
+    tf_pick = st.radio("Timeframe", tf_options, horizontal=True, key="fno_tab_tf")
+    view = fno_df if tf_pick == "All" else fno_df[fno_df["timeframe"] == tf_pick]
+
+    _render_fno_plan(view, "fno_tab")
+
+    if not view.empty:
+        pick = st.selectbox("Chart symbol", view["symbol"].tolist(), key="fno_tab_chart_pick")
+        row = view[view["symbol"] == pick].iloc[0]
+        st.plotly_chart(
+            _chart(pick, row["timeframe"], float(row["level"]), plan=_row_plan(row)),
+            use_container_width=True,
+            key=f"fno_tab_chart_{pick}",
+        )
+        st.caption(
+            "Chart levels — 🟡 Entry · 🟢 TP1/TP2/TP3 (dotted) · 🔴 SL (dashed): "
+            "rule-based template, not advice."
+        )
+
+
 def render_daily_review_tab() -> None:
     st.markdown("#### 📅 Daily Review — top picks by category")
     st.caption(
@@ -1598,8 +1637,6 @@ def render_breakout_tab(
                     )
                     st.caption("⚖️ Exported data is for research use only — not a recommendation to trade.")
 
-                _render_fno_plan(df, key)
-
             with tf_tabs[0]:
                 _show(results, "all")
             for i, tf in enumerate(display_tfs, start=1):
@@ -1723,7 +1760,9 @@ with st.sidebar:
 
     _render_sidebar_roadmap()
 
-tab_breakout, tab_cpr, tab_review = st.tabs(["Breakout Scanner", "CPR Scanner", "📅 Daily Review"])
+tab_breakout, tab_cpr, tab_fno, tab_review = st.tabs(
+    ["Breakout Scanner", "CPR Scanner", "🎯 F&O Plan", "📅 Daily Review"]
+)
 
 with tab_breakout:
     render_breakout_tab(
@@ -1740,6 +1779,9 @@ with tab_cpr:
         universe_total=universe_total,
         universe_sample=universe_sample,
     )
+
+with tab_fno:
+    render_fno_tab()
 
 with tab_review:
     render_daily_review_tab()
