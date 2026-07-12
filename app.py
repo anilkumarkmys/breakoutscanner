@@ -713,13 +713,22 @@ def _market_open() -> bool:
     return now.weekday() < 5 and dtime(9, 15) <= now.time() <= dtime(15, 45)
 
 
-@_fragment(run_every="30s")
+_REFRESH_CHOICES: dict[str, int] = {
+    "30 sec": 30,
+    "1 min": 60,
+    "2 min": 120,
+    "5 min": 300,
+    "10 min": 600,
+}
+
+
+@_fragment(run_every="15s")
 def _auto_refresh_heartbeat() -> None:
-    """Ticks every 30s; when due during market hours, pulls newly committed
+    """Ticks every 15s; when due during market hours, pulls newly committed
     scan results from GitHub and reruns the whole app."""
     if not st.session_state.get("auto_refresh_on", True) or not _market_open():
         return
-    interval = int(st.session_state.get("auto_refresh_mins", 5)) * 60
+    interval = int(st.session_state.get("auto_refresh_secs", 60))
     now = _time_mod.time()
     if now - st.session_state.get("_last_sync_check", 0.0) < interval:
         return
@@ -736,16 +745,20 @@ def _auto_refresh_heartbeat() -> None:
             st.rerun()
 
 
+@_fragment(run_every="10s")
 def _tab_refresh_status() -> None:
-    """Per-tab refresh strip: data age, market state, refresh cadence."""
+    """Per-tab live refresh strip: current time, data age, market state,
+    refresh cadence. Re-renders every 10s so the clock tracks live time."""
     meta = load_scan_info()
     scanned = meta.get("scanned_at_display") or "—"
+    now = datetime.now(_IST)
     open_now = _market_open()
-    bits = [f"🔄 Data as of **{scanned}**"]
+    bits = [f"🕐 **{now.strftime('%d %b %Y, %I:%M:%S %p')} IST**"]
+    bits.append(f"🔄 data as of **{scanned}**")
     bits.append("🟢 market open" if open_now else "⚪ market closed")
     if st.session_state.get("auto_refresh_on", True):
-        mins = int(st.session_state.get("auto_refresh_mins", 5))
-        bits.append(f"auto-refresh every {mins} min" + ("" if open_now else " (paused)"))
+        label = st.session_state.get("auto_refresh_label", "1 min")
+        bits.append(f"auto-refresh every {label}" + ("" if open_now else " (paused)"))
     else:
         bits.append("auto-refresh off")
     checked = st.session_state.get("_last_check_display")
@@ -2225,12 +2238,18 @@ with st.sidebar:
         help="Checks GitHub for newly committed scheduled-scan results and reloads the app "
         "automatically. Active Mon–Fri 09:15–15:45 IST.",
     )
-    st.selectbox("Interval (minutes)", [2, 5, 10, 15], index=1, key="auto_refresh_mins")
+    refresh_label = st.selectbox("Interval", list(_REFRESH_CHOICES), index=1, key="auto_refresh_label")
+    st.session_state["auto_refresh_secs"] = _REFRESH_CHOICES[refresh_label]
     _auto_refresh_heartbeat()
     st.caption(
         "🟢 Market open — watching for new scan commits."
         if _market_open()
         else "⚪ Market closed — auto-refresh paused until the next session."
+    )
+    st.caption(
+        "Note: GitHub's CDN can add up to ~5 min before a fresh commit is visible, and new scan "
+        "data lands at the Action's schedule — sub-minute intervals mainly keep the clock and "
+        "status live."
     )
 
     _render_sidebar_roadmap()
