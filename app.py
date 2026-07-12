@@ -47,7 +47,15 @@ from results_store import (
     save_cpr_results,
     save_scan_results,
 )
-from options_plan import OptionPlan, build_plan, fetch_option_chain
+from options_plan import (
+    OptionPlan,
+    build_plan,
+    chain_expiries,
+    chain_leg,
+    chain_strikes,
+    fetch_option_chain,
+    premium_levels,
+)
 from remote_sync import sync_from_github
 from scanner import filter_results, scan_universe
 
@@ -1654,6 +1662,141 @@ def _render_signal_audit(bdf: pd.DataFrame) -> None:
     )
 
 
+def _render_watchlist_trade_view(wl: pd.DataFrame) -> None:
+    """Trade view for a starred F&O pick: stock details with plan chart plus
+    option-chain selection (expiry, CE/PE, strike) and its premium ladder."""
+    fno = wl[wl["symbol"].astype(str).str.upper().isin(_fno_symbols())]
+    if fno.empty:
+        return
+
+    st.divider()
+    st.markdown("##### 🎯 F&O trade view — option chain for a starred pick")
+    labels = {
+        int(i): f"{r['symbol']} · {r.get('direction', '')} · signal {r.get('bar_time', '')}"
+        for i, r in fno.iterrows()
+    }
+    pick = st.selectbox(
+        "Starred F&O pick",
+        options=list(labels.keys()),
+        format_func=lambda i: labels[i],
+        key="wl_fno_pick",
+    )
+    row = fno.loc[pick]
+    sym = str(row["symbol"]).upper()
+    bullish = str(row.get("direction", "")).lower() == "bullish"
+    plan = _row_plan(row)
+
+    st.plotly_chart(
+        _chart(sym, str(row.get("timeframe", "1D")), float(row["level"]), plan=plan),
+        use_container_width=True,
+        key=f"wl_trade_chart_{sym}",
+    )
+    try:
+        audited = _audit_signal(row)
+    except Exception:
+        audited = None
+    if audited:
+        st.markdown(
+            f"**Latest** {audited['Latest ₹']} · **P&L** {audited['P&L %']} · "
+            f"**Peak** {audited['Peak %']} · {audited['Status']}"
+        )
+
+    live = st.toggle(
+        "Fetch live option chain from NSE",
+        value=True,
+        key="wl_chain_live",
+        help="Works when NSE is reachable (locally in India, market hours). "
+        "Off or unreachable = estimated ATM plan without premiums.",
+    )
+    chain = _cached_option_chain(sym) if live else None
+    if not chain:
+        est = build_plan(sym, str(row.get("direction", "")), float(row["close"]), float(row["level"]))
+        st.info(
+            f"Option chain unavailable — estimated plan: **{est.opt_type} {est.strike:g}** · "
+            f"expiry **{est.expiry}** · spot entry ₹{est.entry:,.2f} · "
+            f"TPs {' / '.join(f'{t:,.2f}' for t in est.tps)} · SL ₹{est.sl:,.2f}. "
+            "Turn on the toggle (with NSE reachable) for strikes, LTP, and premium levels."
+        )
+        return
+
+    expiries = chain_expiries(chain)
+    if not expiries:
+        st.warning("Chain returned no expiries.")
+        return
+    col_e, col_t, col_s = st.columns([2, 1, 2])
+    with col_e:
+        expiry = st.selectbox("Expiry", expiries[:4], key=f"wl_exp_{sym}")
+    with col_t:
+        opt_type = st.radio(
+            "Option",
+            ["CE", "PE"],
+            index=0 if bullish else 1,
+            horizontal=True,
+            key=f"wl_ot_{sym}",
+        )
+    strikes = chain_strikes(chain, expiry)
+    if not strikes:
+        st.warning("No strikes for this expiry.")
+        return
+    atm = min(strikes, key=lambda s: abs(s - float(row["close"])))
+    atm_idx = strikes.index(atm)
+    window = strikes[max(0, atm_idx - 5) : atm_idx + 6]
+    with col_s:
+        strike = st.selectbox(
+            "Strike",
+            window,
+            index=window.index(atm),
+            format_func=lambda s: f"{s:g}" + (" (ATM)" if s == atm else ""),
+            key=f"wl_strike_{sym}_{expiry}",
+        )
+
+    leg = chain_leg(chain, expiry, strike, opt_type)
+    if not leg or leg.get("lastPrice") in (None, 0):
+        st.warning("No traded price for this contract — pick a nearer strike or expiry.")
+        return
+
+    ltp = float(leg["lastPrice"])
+    iv_pct = float(leg.get("impliedVolatility") or 0) or None
+    oi = leg.get("openInterest")
+    vol = leg.get("totalTradedVolume")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(f"{sym} {strike:g} {opt_type}", f"₹{ltp:,.2f}")
+    c2.metric("IV", f"{iv_pct:.1f}%" if iv_pct else "—")
+    c3.metric("OI", f"{int(oi):,}" if oi is not None else "—")
+    c4.metric("Volume", f"{int(vol):,}" if vol is not None else "—")
+
+    prem = premium_levels(
+        float(row["close"]), plan.sl, plan.tps, float(strike), expiry, opt_type, ltp, iv_pct
+    )
+    if prem:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Contract": f"{sym} {expiry} {strike:g} {opt_type}",
+                        "Prem Entry ₹ (LTP)": f"{ltp:,.2f}",
+                        "Prem TP1/2/3 ₹": " / ".join(f"{v:,.2f}" for v in prem["tps"]),
+                        "Prem SL ₹": f"{prem['sl']:,.2f}",
+                        "Spot Entry ₹": f"{plan.entry:,.2f}",
+                        "Spot TP1/2/3 ₹": " / ".join(f"{v:,.2f}" for v in plan.tps),
+                        "Spot SL ₹": f"{plan.sl:,.2f}",
+                        "IV used": f"{prem['iv'] * 100:.1f}%",
+                    }
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+            key=f"wl_prem_{sym}",
+        )
+        st.caption(
+            "⚖️ Premium TP/SL are Black–Scholes repricings at each spot target, anchored to the live "
+            "LTP, no time decay. Verify liquidity, spreads, and margins with your broker — research "
+            "template, not trade advice."
+        )
+    else:
+        st.info("Could not price this contract (missing IV and unpriceable LTP).")
+
+
 def render_watchlist_tab() -> None:
     _tab_refresh_status()
     st.markdown("#### ⭐ Watchlist & top picks")
@@ -1760,6 +1903,8 @@ def render_watchlist_tab() -> None:
         if to_remove and st.button("Remove selected", key="wl_rm_btn"):
             remove_from_watchlist(to_remove)
             st.rerun()
+
+        _render_watchlist_trade_view(wl)
 
     st.divider()
     with st.expander("➕ Add from current breakout signals"):

@@ -143,6 +143,63 @@ def estimate_next_expiry(today: Optional[date] = None) -> date:
     return exp
 
 
+def chain_expiries(chain: dict[str, Any]) -> list[str]:
+    try:
+        return list(chain["records"].get("expiryDates") or [])
+    except Exception:
+        return []
+
+
+def chain_strikes(chain: dict[str, Any], expiry: str) -> list[float]:
+    try:
+        return sorted(
+            {
+                float(r["strikePrice"])
+                for r in chain["records"]["data"]
+                if r.get("strikePrice") and r.get("expiryDate") == expiry
+            }
+        )
+    except Exception:
+        return []
+
+
+def chain_leg(chain: dict[str, Any], expiry: str, strike: float, opt_type: str) -> Optional[dict[str, Any]]:
+    """The CE/PE record for one expiry+strike: lastPrice, impliedVolatility, OI, etc."""
+    try:
+        for r in chain["records"]["data"]:
+            if r.get("expiryDate") == expiry and float(r.get("strikePrice", -1)) == float(strike):
+                return r.get(opt_type.upper())
+    except Exception:
+        pass
+    return None
+
+
+def premium_levels(
+    entry: float,
+    sl: float,
+    tps: tuple[float, ...],
+    strike: float,
+    expiry_label: str,
+    opt_type: str,
+    ltp: float,
+    iv_pct: Optional[float] = None,
+) -> Optional[dict[str, Any]]:
+    """Premium ladder for a chosen contract: Black-Scholes repricing at each
+    spot target, anchored to the live LTP. None when unpriceable."""
+    t_years = _years_to_expiry(expiry_label)
+    if not t_years or not ltp or ltp <= 0:
+        return None
+    iv = (iv_pct / 100.0) if iv_pct else _implied_vol(ltp, entry, strike, t_years, opt_type)
+    if not iv:
+        return None
+    base = _bs_price(entry, strike, t_years, iv, opt_type)
+
+    def _prem(spot: float) -> float:
+        return round(max(ltp + (_bs_price(spot, strike, t_years, iv, opt_type) - base), MIN_PREMIUM), 2)
+
+    return {"tps": tuple(_prem(tp) for tp in tps), "sl": _prem(sl), "iv": iv}
+
+
 def build_plan(
     symbol: str,
     direction: str,
