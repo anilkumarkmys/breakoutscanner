@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
-from datetime import timedelta
+import time as _time_mod
+from datetime import datetime, time as dtime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -38,6 +40,7 @@ from results_store import (
     list_history_dates,
     load_cpr_results,
     load_history,
+    load_scan_info,
     load_scan_results,
     load_watchlist,
     remove_from_watchlist,
@@ -45,6 +48,7 @@ from results_store import (
     save_scan_results,
 )
 from options_plan import OptionPlan, build_plan, fetch_option_chain
+from remote_sync import sync_from_github
 from scanner import filter_results, scan_universe
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -393,6 +397,7 @@ _ROADMAP_SHIPPED = [
     "Scheduled scans via GitHub Actions",
     "📊 Signal audit vs real movement",
     "⭐ Watchlist with daily Top 5",
+    "🔄 Auto-refresh during market hours",
     "F&O options plan — CE/PE, strike, expiry, entry/TP/SL",
     "NIFTY 250 universe",
 ]
@@ -685,6 +690,66 @@ def _style_results(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_option_chain(symbol: str) -> dict | None:
     return fetch_option_chain(symbol)
+
+
+_IST = ZoneInfo("Asia/Kolkata")
+
+# graceful fallback for Streamlit versions without fragments
+if hasattr(st, "fragment"):
+    _fragment = st.fragment
+else:  # pragma: no cover
+
+    def _fragment(*_a, **_k):
+        def _deco(fn):
+            return fn
+
+        return _deco
+
+
+def _market_open() -> bool:
+    now = datetime.now(_IST)
+    return now.weekday() < 5 and dtime(9, 15) <= now.time() <= dtime(15, 45)
+
+
+@_fragment(run_every="30s")
+def _auto_refresh_heartbeat() -> None:
+    """Ticks every 30s; when due during market hours, pulls newly committed
+    scan results from GitHub and reruns the whole app."""
+    if not st.session_state.get("auto_refresh_on", True) or not _market_open():
+        return
+    interval = int(st.session_state.get("auto_refresh_mins", 5)) * 60
+    now = _time_mod.time()
+    if now - st.session_state.get("_last_sync_check", 0.0) < interval:
+        return
+    st.session_state["_last_sync_check"] = now
+    updated = sync_from_github()
+    st.session_state["_last_check_display"] = datetime.now(_IST).strftime("%I:%M %p")
+    if updated:
+        for k in ("breakout_results", "breakout_scan_meta", "cpr_results", "cpr_scan_meta"):
+            st.session_state.pop(k, None)
+        st.cache_data.clear()
+        try:
+            st.rerun(scope="app")
+        except TypeError:
+            st.rerun()
+
+
+def _tab_refresh_status() -> None:
+    """Per-tab refresh strip: data age, market state, refresh cadence."""
+    meta = load_scan_info()
+    scanned = meta.get("scanned_at_display") or "—"
+    open_now = _market_open()
+    bits = [f"🔄 Data as of **{scanned}**"]
+    bits.append("🟢 market open" if open_now else "⚪ market closed")
+    if st.session_state.get("auto_refresh_on", True):
+        mins = int(st.session_state.get("auto_refresh_mins", 5))
+        bits.append(f"auto-refresh every {mins} min" + ("" if open_now else " (paused)"))
+    else:
+        bits.append("auto-refresh off")
+    checked = st.session_state.get("_last_check_display")
+    if checked:
+        bits.append(f"last checked {checked} IST")
+    st.caption(" · ".join(bits))
 
 
 def _fno_symbols() -> frozenset[str]:
@@ -1112,9 +1177,10 @@ def render_cpr_tab(
     universe_total: int,
     universe_sample: str,
 ) -> None:
+    _tab_refresh_status()
     st.markdown(
         """
-<div style="background:linear-gradient(135deg,#1e1b4b 0%,#312e81 55%,#1e3a5f 100%);
+<div style="background:linear-gradient(135deg,#1a1408 0%,#241a09 55%,#0a0a0a 100%);
 padding:1rem 1.25rem;border-radius:12px;margin-bottom:1rem;">
 <h3 style="color:white;margin:0;">📊 Virgin CPR Scanner</h3>
 <p style="color:#c7d2fe;margin:0.35rem 0 0;font-size:0.9rem;">
@@ -1356,6 +1422,7 @@ def _review_table(df: pd.DataFrame, kind: str) -> pd.DataFrame:
 
 
 def render_fno_tab() -> None:
+    _tab_refresh_status()
     st.markdown("#### 🎯 F&O options plan")
     st.caption(
         "Options view of the current breakout signals for F&O-listed stocks — "
@@ -1538,6 +1605,7 @@ def _render_signal_audit(bdf: pd.DataFrame) -> None:
 
 
 def render_watchlist_tab() -> None:
+    _tab_refresh_status()
     st.markdown("#### ⭐ Watchlist & top picks")
     st.caption(
         "Star signals to track them over time. The Top 5 refreshes automatically with each new scan day. "
@@ -1668,6 +1736,7 @@ def render_watchlist_tab() -> None:
 
 
 def render_daily_review_tab() -> None:
+    _tab_refresh_status()
     st.markdown("#### 📅 Daily Review — top picks by category")
     st.caption(
         "⚖️ The day's algorithmic scan output grouped for review, with scan date & time (IST). "
@@ -1831,6 +1900,7 @@ def render_breakout_tab(
     universe_total: int,
     universe_sample: str,
 ) -> None:
+    _tab_refresh_status()
     symbols = scan_symbols
     dir_filter = None if direction == "Both" else direction.lower()
 
@@ -2105,6 +2175,23 @@ with st.sidebar:
             "Standard: close > prior N-bar high/low + volume surge + strong close. "
             "Weekly bars from daily data (Fri close)."
         )
+
+    st.divider()
+    st.header("🔄 Auto-refresh")
+    st.toggle(
+        "Refresh during market hours",
+        value=True,
+        key="auto_refresh_on",
+        help="Checks GitHub for newly committed scheduled-scan results and reloads the app "
+        "automatically. Active Mon–Fri 09:15–15:45 IST.",
+    )
+    st.selectbox("Interval (minutes)", [2, 5, 10, 15], index=1, key="auto_refresh_mins")
+    _auto_refresh_heartbeat()
+    st.caption(
+        "🟢 Market open — watching for new scan commits."
+        if _market_open()
+        else "⚪ Market closed — auto-refresh paused until the next session."
+    )
 
     _render_sidebar_roadmap()
 
