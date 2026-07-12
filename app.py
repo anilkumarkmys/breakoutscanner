@@ -398,6 +398,7 @@ _ROADMAP_SHIPPED = [
     "📊 Signal audit vs real movement",
     "⭐ Watchlist with daily Top 5",
     "🔄 Auto-refresh during market hours",
+    "1-Month timeframe & multi-TF confluence",
     "F&O options plan — CE/PE, strike, expiry, entry/TP/SL",
     "NIFTY 250 universe",
 ]
@@ -525,7 +526,8 @@ def _render_last_scan_panel(meta: dict, results: pd.DataFrame | None = None) -> 
     if not scanned_at or scanned_at == "—":
         return
 
-    n_breakouts = int(meta.get("breakout_count", len(results) if results is not None else 0))
+    raw_count = pd.to_numeric(meta.get("breakout_count"), errors="coerce")
+    n_breakouts = int(raw_count) if pd.notna(raw_count) else (len(results) if results is not None else 0)
     n_sym = meta.get("symbols_scanned", meta.get("symbols", "—"))
     timeframes = meta.get("timeframes", "")
     if isinstance(timeframes, list):
@@ -756,6 +758,41 @@ def _fno_symbols() -> frozenset[str]:
     if "fno_symbols" not in st.session_state:
         st.session_state.fno_symbols = fno_symbol_set()
     return st.session_state.fno_symbols
+
+
+def _render_confluence(df: pd.DataFrame) -> None:
+    """Stocks breaking out in the same direction on 2+ timeframes."""
+    if df is None or df.empty or "timeframe" not in df.columns:
+        return
+    order = {tf: i for i, tf in enumerate(TIMEFRAME_ORDER)}
+    grouped = (
+        df.groupby(["symbol", "direction"])["timeframe"]
+        .agg(lambda s: sorted(set(s), key=lambda t: order.get(t, 99)))
+        .reset_index()
+    )
+    grouped["n"] = grouped["timeframe"].map(len)
+    multi = grouped[grouped["n"] >= 2].sort_values("n", ascending=False)
+    if multi.empty:
+        return
+
+    pills = []
+    for _, r in multi.iterrows():
+        bullish = str(r["direction"]).lower() == "bullish"
+        icon = "🟢" if bullish else "🔴"
+        accent = "#5dbb7f" if bullish else "#e06552"
+        tfs = " · ".join(TIMEFRAMES[t].label if t in TIMEFRAMES else t for t in r["timeframe"])
+        pills.append(
+            f'<span style="display:inline-block;margin:0 0.4rem 0.4rem 0;padding:0.3rem 0.7rem;'
+            f'border-radius:999px;border:1px solid rgba(240,184,78,.35);border-left:4px solid {accent};'
+            f'background:rgba(14,12,8,.92);color:#f8f5ee;font-size:0.85rem;font-weight:700;">'
+            f'{icon} {r["symbol"]} <span style="color:#d9b878;font-weight:600;">— {tfs} (×{r["n"]})</span></span>'
+        )
+    st.markdown("##### 🔗 Multi-timeframe confluence")
+    _render_card_html("<div>" + "".join(pills) + "</div>")
+    st.caption(
+        "Same-direction breakouts on multiple timeframes in the current scan — "
+        "alignment across horizons, worth reviewing first."
+    )
 
 
 def _signal_score(row: pd.Series) -> float:
@@ -2013,6 +2050,8 @@ def render_breakout_tab(
             if meta.get("mode"):
                 st.caption(f"Mode: **{meta['mode']}** · cached results — use **Force Refresh Scan** to update")
 
+            _render_confluence(results)
+
             tf_tabs = st.tabs(["All"] + [TIMEFRAMES[t].label for t in display_tfs])
 
             def _show(df: pd.DataFrame, key: str) -> None:
@@ -2069,15 +2108,16 @@ ensure_dirs()
 
 logo_src = _logo_data_uri()
 logo_img = f'<img src="{logo_src}" alt="TAG Trade And Grow logo">' if logo_src else ""
+_build_stamp = datetime.fromtimestamp(Path(__file__).stat().st_mtime, _IST).strftime("%d %b %Y, %I:%M %p IST")
 st.markdown(
     f"""
 <div class="tag-hero">
   {logo_img}
   <div>
     <h1>TAG Breakout Scanner</h1>
-    <p>Trade And Grow scanner for Donchian breakouts, volume confirmation and Virgin CPR context across 1H, 1D and 1W timeframes.</p>
+    <p>Trade And Grow scanner for Donchian breakouts, volume confirmation and Virgin CPR context across 1H, 1D, 1W and 1M timeframes.</p>
     <p><a href="{PUBLISHED_URL}" target="_blank" rel="noopener">tag-breakoutscanner.streamlit.app</a></p>
-    <span class="tag-build">TAG black/gold build - 2026-07-06</span>
+    <span class="tag-build">TAG black/gold build · updated {_build_stamp}</span>
   </div>
 </div>
 """,

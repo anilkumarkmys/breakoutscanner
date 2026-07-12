@@ -153,11 +153,21 @@ TIMEFRAMES: dict[str, TimeframeConfig] = {
         atr_period=14,
         atr_mult=1.2,
     ),
+    "1M": TimeframeConfig(
+        label="1 Month",
+        lookback=6,
+        vol_lookback=6,
+        min_bars=12,
+        vol_mult=1.25,
+        strong_close_pct=0.60,
+        atr_period=6,
+        atr_mult=1.2,
+    ),
 }
 
 
 # Canonical display / scan order
-TIMEFRAME_ORDER: tuple[str, ...] = ("1H", "1D", "1W")
+TIMEFRAME_ORDER: tuple[str, ...] = ("1H", "1D", "1W", "1M")
 
 
 def sort_timeframes(timeframes: list[str] | tuple[str, ...]) -> list[str]:

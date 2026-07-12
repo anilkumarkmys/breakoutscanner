@@ -253,16 +253,53 @@ def resample_weekly(daily: pd.DataFrame) -> pd.DataFrame:
     return weekly.dropna(subset=["close"])
 
 
+def resample_monthly(daily: pd.DataFrame) -> pd.DataFrame:
+    if daily.empty:
+        return daily
+    monthly = daily.resample("ME").agg(
+        {
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }
+    )
+    return monthly.dropna(subset=["close"])
+
+
 def load_daily(symbol: str, days: int = LOOKBACK_DAYS, use_cache: bool = True) -> pd.DataFrame:
     sym = symbol.upper()
     path = CACHE_DAILY / f"{sym}.csv"
     min_rows = min(60, days // 3)
 
+    cached = pd.DataFrame()
+    covers = False
     if use_cache and path.is_file():
         try:
-            df = _read_csv_cache(path)
-            fresh = not df.empty and df.index[-1].date() >= date.today() - timedelta(days=3)
-            if fresh and len(df) >= min_rows:
+            cached = _read_csv_cache(path)
+            fresh = not cached.empty and cached.index[-1].date() >= date.today() - timedelta(days=3)
+            # cache must also reach far enough back for the requested window
+            # (1M scans ask for ~900 days; a 400-day cache can't serve them)
+            covers = not cached.empty and cached.index[0].date() <= date.today() - timedelta(
+                days=int(days * 0.8)
+            )
+            if fresh and covers and len(cached) >= min_rows:
+                return cached
+        except Exception:
+            cached = pd.DataFrame()
+
+    # Incremental refresh: a stale-but-substantial cache only needs the gap
+    # since its last bar, not a full re-download.
+    if use_cache and covers and not cached.empty and len(cached) >= min_rows:
+        try:
+            gap_days = (date.today() - cached.index[-1].date()).days + 5
+            recent = fetch_daily(sym, days=max(gap_days, 10))
+            if not recent.empty:
+                df = pd.concat([cached, recent])
+                df = df[~df.index.duplicated(keep="last")].sort_index()
+                path.parent.mkdir(parents=True, exist_ok=True)
+                df.to_csv(path)
                 return df
         except Exception:
             pass
@@ -304,10 +341,14 @@ def load_bars(
     use_cache: bool = True,
     days: int = LOOKBACK_DAYS,
 ) -> pd.DataFrame:
-    """Return OHLCV for the requested timeframe key: 1H, 1D, 1W."""
+    """Return OHLCV for the requested timeframe key: 1H, 1D, 1W, 1M."""
     tf = timeframe.upper()
     if tf == "1H":
         return load_hourly(symbol, use_cache=use_cache)
+    if tf == "1M":
+        # monthly Donchian needs ~2 years of daily bars to build enough candles
+        daily = load_daily(symbol, days=max(days, 900), use_cache=use_cache)
+        return resample_monthly(daily)
     daily = load_daily(symbol, days=days, use_cache=use_cache)
     if tf == "1W":
         return resample_weekly(daily)

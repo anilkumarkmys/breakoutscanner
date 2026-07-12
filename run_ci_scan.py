@@ -15,7 +15,7 @@ from data_loader import load_universe_symbols, resolve_universe_symbols
 from results_store import save_cpr_results, save_scan_results
 from scanner import filter_results, scan_universe
 
-TIMEFRAMES = ["1H", "1D", "1W"]
+TIMEFRAMES = ["1H", "1D", "1W", "1M"]
 VOL_MULT = 1.25
 LOOKBACK = 20
 
