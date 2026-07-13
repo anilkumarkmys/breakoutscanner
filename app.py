@@ -47,6 +47,7 @@ from results_store import (
     save_cpr_results,
     save_scan_results,
 )
+from gap_scanner import scan_gaps
 from options_plan import (
     OptionPlan,
     build_plan,
@@ -407,12 +408,12 @@ _ROADMAP_SHIPPED = [
     "⭐ Watchlist with daily Top 5",
     "🔄 Auto-refresh during market hours",
     "1-Month timeframe & multi-TF confluence",
+    "📈 Gap-up / gap-down scanner",
     "F&O options plan — CE/PE, strike, expiry, entry/TP/SL",
     "NIFTY 250 universe",
 ]
 
 _ROADMAP_UPCOMING = [
-    "Gap-up / gap-down scanner",
     "Opening-range breakout (ORB) scanner",
     "Volume-surge & delivery scanner",
     "Relative strength vs NIFTY (sector rotation)",
@@ -1797,6 +1798,82 @@ def _render_watchlist_trade_view(wl: pd.DataFrame) -> None:
         st.info("Could not price this contract (missing IV and unpriceable LTP).")
 
 
+def render_gap_tab(scan_symbols: list[str], universe_choice: str) -> None:
+    _tab_refresh_status()
+    st.markdown("#### 📈 Gap scanner — opening gaps vs previous close")
+    st.caption(
+        "Latest session's open compared with the previous close on daily bars — observation of what "
+        "happened at the open, not a prediction. Research only."
+    )
+
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        min_gap = st.slider("Minimum gap (%)", 0.5, 5.0, 2.0, 0.25, key="gap_min")
+    with col_b:
+        gap_dir = st.radio("Direction", ["Both", "Gap-up", "Gap-down"], horizontal=True, key="gap_dir")
+
+    if st.button("Run Gap Scan", type="primary", key="gap_run"):
+        progress = st.progress(0.0, text="Scanning gaps…")
+
+        def on_progress(done: int, total: int, label: str) -> None:
+            progress.progress(done / max(total, 1), text=f"Scanning {label} ({done}/{total})…")
+
+        with st.spinner("Scanning opening gaps…"):
+            gdf = scan_gaps(scan_symbols, min_gap_pct=min_gap, progress_callback=on_progress)
+        progress.empty()
+        st.session_state["gap_results"] = gdf
+        st.session_state["gap_scanned_at"] = datetime.now(_IST).strftime("%d %b %Y, %I:%M %p IST")
+        st.session_state["gap_universe"] = universe_choice
+
+    gdf = st.session_state.get("gap_results")
+    if gdf is None:
+        st.info("Click **Run Gap Scan** to scan the selected universe (uses the shared price cache — fast when warm).")
+        return
+    if gdf.empty:
+        st.warning("No gaps at or above the threshold in the latest session.")
+        return
+
+    if gap_dir != "Both":
+        want = "gap-up" if gap_dir == "Gap-up" else "gap-down"
+        view = gdf[gdf["direction"] == want]
+    else:
+        view = gdf
+    scanned_at = st.session_state.get("gap_scanned_at", "—")
+    ups = int((gdf["direction"] == "gap-up").sum())
+    downs = int((gdf["direction"] == "gap-down").sum())
+    st.markdown(
+        f"**{len(view)}** shown · 🟢 **{ups}** gap-ups · 🔴 **{downs}** gap-downs · "
+        f"session **{gdf['session'].iloc[0] if not gdf.empty else '—'}** · scanned {scanned_at}"
+    )
+
+    out = pd.DataFrame(
+        {
+            "Symbol": view["symbol"],
+            "Dir": view["direction"].map(lambda d: "🟢 Up" if d == "gap-up" else "🔴 Down"),
+            "Session": view["session"],
+            "Prev Close ₹": view["prev_close"].map(lambda v: f"{v:,.2f}"),
+            "Open ₹": view["open"].map(lambda v: f"{v:,.2f}"),
+            "Gap %": view["gap_pct"].map(lambda v: f"{v:+.2f}%"),
+            "Close ₹": view["close"].map(lambda v: f"{v:,.2f}"),
+            "Since open %": view["since_open_pct"].map(lambda v: f"{v:+.2f}%"),
+            "Vol ×": view["volume_ratio"].map(lambda v: f"{v:.2f}×" if pd.notna(v) else "—"),
+        }
+    )
+    st.dataframe(out, hide_index=True, use_container_width=True, key="gap_table")
+    st.caption(
+        "**Since open %** shows whether the gap held (continued) or filled (reversed) through the session. "
+        "Gap-and-go vs gap-fill behaviour is regime-dependent — verify liquidity before acting."
+    )
+    st.download_button(
+        "Download Gap CSV",
+        view.to_csv(index=False),
+        file_name="gap_scan.csv",
+        mime="text/csv",
+        key="gap_dl",
+    )
+    st.caption("⚖️ Exported data is for research use only — not a recommendation to trade.")
+
+
 def render_watchlist_tab() -> None:
     _tab_refresh_status()
     st.markdown("#### ⭐ Watchlist & top picks")
@@ -2399,8 +2476,8 @@ with st.sidebar:
 
     _render_sidebar_roadmap()
 
-tab_breakout, tab_cpr, tab_fno, tab_watchlist, tab_review = st.tabs(
-    ["Breakout Scanner", "CPR Scanner", "🎯 F&O Plan", "⭐ Watchlist", "📅 Daily Review"]
+tab_breakout, tab_cpr, tab_gaps, tab_fno, tab_watchlist, tab_review = st.tabs(
+    ["Breakout Scanner", "CPR Scanner", "📈 Gaps", "🎯 F&O Plan", "⭐ Watchlist", "📅 Daily Review"]
 )
 
 with tab_breakout:
@@ -2418,6 +2495,9 @@ with tab_cpr:
         universe_total=universe_total,
         universe_sample=universe_sample,
     )
+
+with tab_gaps:
+    render_gap_tab(scan_symbols, universe_choice)
 
 with tab_fno:
     render_fno_tab()
