@@ -698,8 +698,8 @@ def _style_results(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def _cached_option_chain(symbol: str) -> dict | None:
-    return fetch_option_chain(symbol)
+def _cached_option_chain(symbol: str, expiries: int = 1) -> dict | None:
+    return fetch_option_chain(symbol, expiries_to_fetch=expiries)
 
 
 _IST = ZoneInfo("Asia/Kolkata")
@@ -1708,7 +1708,7 @@ def _render_watchlist_trade_view(wl: pd.DataFrame) -> None:
         help="Works when NSE is reachable (locally in India, market hours). "
         "Off or unreachable = estimated ATM plan without premiums.",
     )
-    chain = _cached_option_chain(sym) if live else None
+    chain = _cached_option_chain(sym, expiries=4) if live else None
     if not chain:
         est = build_plan(sym, str(row.get("direction", "")), float(row["close"]), float(row["level"]))
         st.info(

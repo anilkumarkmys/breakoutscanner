@@ -5,3 +5,4 @@ streamlit>=1.37
 plotly>=5.18
 scipy>=1.11
 requests>=2.31
+curl_cffi>=0.7

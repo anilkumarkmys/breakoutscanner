@@ -18,16 +18,29 @@ from typing import Any, Optional
 
 import requests
 
-NSE_CHAIN_URL = "https://www.nseindia.com/api/option-chain-equities?symbol={symbol}"
+try:  # TLS-impersonating client gets past NSE's Akamai bot detection
+    from curl_cffi import requests as curl_requests
+except ImportError:  # pragma: no cover
+    curl_requests = None
+
+NSE_CONTRACT_INFO_URL = "https://www.nseindia.com/api/option-chain-contract-info?symbol={symbol}"
+NSE_CHAIN_V3_URL = "https://www.nseindia.com/api/option-chain-v3?type=Equity&symbol={symbol}&expiry={expiry}"
+_NSE_ROOT = "https://www.nseindia.com/"
 _NSE_HOME = "https://www.nseindia.com/option-chain"
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
     "Referer": _NSE_HOME,
+    "X-Requested-With": "XMLHttpRequest",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Connection": "keep-alive",
 }
 
 # SL sits 0.5% beyond the broken level; targets are 1R/2R/3R from entry.
@@ -94,17 +107,78 @@ class OptionPlan:
     iv: Optional[float] = None  # IV used for the premium mapping
 
 
-def fetch_option_chain(symbol: str, timeout: float = 6.0) -> Optional[dict[str, Any]]:
-    """Fetch the NSE equity option chain; None when unreachable/blocked."""
+def _new_nse_session():
+    """Session that can pass NSE's Akamai bot checks. Plain requests gets an
+    empty {} from the API (TLS fingerprinting); curl_cffi impersonates a real
+    Chrome TLS stack and works. Falls back to requests when unavailable."""
+    if curl_requests is not None:
+        return curl_requests.Session(impersonate="chrome")
+    s = requests.Session()
+    s.headers.update(_HEADERS)
+    return s
+
+
+def _get_json(session, url: str, timeout: float) -> Optional[dict[str, Any]]:
     try:
-        with requests.Session() as s:
-            s.headers.update(_HEADERS)
-            s.get(_NSE_HOME, timeout=timeout)  # cookie warm-up
-            resp = s.get(NSE_CHAIN_URL.format(symbol=symbol.upper()), timeout=timeout)
-            resp.raise_for_status()
+        resp = session.get(url, timeout=timeout)
+        if resp.status_code == 200 and len(resp.content) > 10:
             data = resp.json()
-        if isinstance(data, dict) and data.get("records", {}).get("data"):
-            return data
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return None
+
+
+def fetch_option_chain(
+    symbol: str, timeout: float = 8.0, expiries_to_fetch: int = 1
+) -> Optional[dict[str, Any]]:
+    """Fetch the NSE equity option chain; None when unreachable/blocked.
+
+    Uses NSE's current (v3) API: contract-info lists the expiries, then the
+    per-expiry chain endpoint is fetched for the first `expiries_to_fetch`
+    expiries. The result is normalised to the legacy shape (records.data rows
+    carrying `expiryDate`) so downstream consumers stay unchanged. Requires a
+    cookie warm-up via the option-chain page first."""
+    sym = symbol.upper()
+    try:
+        s = _new_nse_session()
+        try:
+            s.get(_NSE_HOME, timeout=timeout)
+            info = _get_json(s, NSE_CONTRACT_INFO_URL.format(symbol=sym), timeout)
+            if not info or not info.get("expiryDates"):
+                # cookies may not have settled; re-warm once and retry
+                s.get(_NSE_ROOT, timeout=timeout)
+                s.get(_NSE_HOME, timeout=timeout)
+                info = _get_json(s, NSE_CONTRACT_INFO_URL.format(symbol=sym), timeout)
+            expiries = (info or {}).get("expiryDates") or []
+            if not expiries:
+                return None
+
+            all_rows: list[dict[str, Any]] = []
+            underlying = None
+            timestamp = None
+            for expiry in expiries[: max(1, expiries_to_fetch)]:
+                data = _get_json(s, NSE_CHAIN_V3_URL.format(symbol=sym, expiry=expiry), timeout)
+                recs = (data or {}).get("records") or {}
+                for row in recs.get("data") or []:
+                    row = dict(row)
+                    row["expiryDate"] = expiry
+                    all_rows.append(row)
+                underlying = recs.get("underlyingValue", underlying)
+                timestamp = recs.get("timestamp", timestamp)
+            if not all_rows:
+                return None
+            return {
+                "records": {
+                    "expiryDates": expiries,
+                    "data": all_rows,
+                    "underlyingValue": underlying,
+                    "timestamp": timestamp,
+                }
+            }
+        finally:
+            s.close()
     except Exception:
         pass
     return None
