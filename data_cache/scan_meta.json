@@ -6,7 +6,8 @@
   "timeframes": [
     "1H",
     "1D",
-    "1W"
+    "1W",
+    "1M"
   ],
   "mode": "Standard",
   "breakout_mode": "standard",
@@ -16,8 +17,8 @@
   "atr_mult": null,
   "only_52w": false,
   "max_symbols": 500,
-  "scanned_at": "2026-07-10T18:13:23+05:30",
-  "scanned_at_display": "10 Jul 2026, 06:13 PM IST",
-  "saved_at": "2026-07-10T18:13:23+05:30",
-  "row_count": 60
+  "scanned_at": "2026-07-13T13:31:24+05:30",
+  "scanned_at_display": "13 Jul 2026, 01:31 PM IST",
+  "saved_at": "2026-07-13T13:31:24+05:30",
+  "row_count": 17
 }
