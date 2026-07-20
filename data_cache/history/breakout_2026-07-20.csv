@@ -1,2 +1,5 @@
 symbol,timeframe,direction,mode,close,level,breakout_pct,volume_ratio,prior_high,prior_low,bar_time,lookback,is_52w_high,strong_close,scanned_at
 AXISBANK,1D,bearish,standard,1255.4,1291.2,-2.77,3.23,1399.02,1291.2,2026-07-20,20,False,True,2026-07-20T13:15:08+05:30
+ULTRACEMCO,1D,bullish,standard,11903.0,11876.0,0.23,2.07,11876.0,11219.0,2026-07-20,20,False,True,2026-07-20T16:01:05+05:30
+SBIN,1D,bullish,standard,1060.0,1059.8,0.02,1.62,1059.8,1011.4,2026-07-20,20,False,True,2026-07-20T16:01:05+05:30
+AXISBANK,1D,bearish,standard,1256.0,1291.2,-2.73,4.25,1399.02,1291.2,2026-07-20,20,False,True,2026-07-20T16:01:05+05:30
